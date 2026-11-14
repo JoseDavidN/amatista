@@ -1,0 +1,4 @@
+module qs.bloqueo
+Bloqueo 1.0 Bloqueo.qml
+ContextoBloqueo 1.0 ContextoBloqueo.qml
+SuperficieBloqueo 1.0 SuperficieBloqueo.qml

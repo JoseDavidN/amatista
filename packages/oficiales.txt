@@ -1,0 +1,45 @@
+# Compositor y portales
+hyprland
+hyprpaper
+hyprpolkitagent
+xdg-desktop-portal-hyprland
+
+# Shell de escritorio (Quickshell) y Qt
+quickshell
+qt6-base
+qt6-declarative
+qt6-svg
+qt6-wayland
+
+# Gráficos
+mesa
+
+# Terminal, editor y shell
+kitty
+neovim
+zsh
+mise
+lazygit
+
+# Tema y fuentes
+adw-gtk-theme
+ttf-jetbrains-mono-nerd
+noto-fonts
+
+# Utilidades que usan tus atajos y Quickshell
+wl-clipboard
+cliphist
+brightnessctl
+libnotify
+jq
+unzip
+
+# Audio, red y Bluetooth
+pipewire-pulse
+alsa-utils
+pavucontrol
+bluez
+bluez-utils
+blueman
+network-manager-applet
+upower

@@ -1,0 +1,285 @@
+# Archivo de configuració nzsh
+
+# ===============================
+# zsh - devstar
+# ===============================
+
+# Simbolo principal del prompt
+prompt_symbol=֍ 
+
+# ===============================
+# Opciones de ZSH
+# ===============================
+
+setopt auto_cd              # Cambiar de directorio solo escribiendo el nombre sin necesidad de cd
+setopt magicequalsubst      # Habilitar la expansión del nombre de archivo para argumento
+setopt nonomatch            # Oculta los mensajes de error si no hay coincidencias
+setopt promptsubst          # Habilita la sustitucion de comandos en el prompt
+setopt extended_glob        # Habilita patrones de coincidencia extendidos para realizar busquedas mas complejas
+
+# el carácter "/" separa palabras al usar Ctrl + W
+WORDCHARS=${WORDCHARS//\/}  # No consideres ciertos caracteres parte de la palabra
+
+# Ocultar el signo '%' al final del prompt
+export PROMPT_EOL_MARK=""
+
+# ===============================
+# Teclado
+# ===============================
+
+bindkey -e                              # Combinaciones de teclas de emacs
+
+# Historial expandido al presionar espacio
+bindkey ' ' magic-space                 # Hacer expansión del historial al presionar  espacio
+
+# Navegación por palabras
+bindkey '^[[1;5C' forward-word		# ctrl + ->
+bindkey '^[[1;5D' backward-word		# ctrl + <-
+
+# Navegacion por caracteres
+bindkey '^[[C' forward-char             # ->
+bindkey '^[[D' backward-char            # <-
+
+# Ctrl + Delete
+bindkey '^[[2;5~' kill-word             # ctrl + Supr
+
+# Ctrl + Tab
+bindkey '^[[Z' undo                     # shift + tab deshacer ultima accion
+
+# ==============================
+# Alias
+# ==============================
+
+# Navegación
+alias ..='cd ../'
+alias ...='cd ../..'
+
+# Listado
+alias ll='ls -lahF'
+alias la='la -A'
+
+# Git - básicos
+alias gs='git status'
+alias ga='git add'
+alias gaa='git add --all'
+alias gc='git commit'
+alias gcm='git commit -m'
+alias gp='git push'
+
+# Git - ramas
+alias gb='git branch'
+alias gba='git branch -a'
+alias gco='git checkout'
+alias gcb='git checkout -b'
+
+# Git - historial
+alias glog='git log --oneline --graph --decorate --all'
+alias glast='git log -1 --stat'
+
+# Git - diferencias
+alias gd='git diff'
+alias gds='git diff --staged'
+
+# Git - remoto
+alias gr='git remote -v'
+
+# Docker
+alias d='docker'
+alias dc='docker compose'
+alias dps='docker ps'
+alias dpa='docker ps -a'
+alias di='docker images'
+alias dex='docker exec -it'
+alias dlog='docker logs'
+alias dlf='docker logs -f'
+alias dst='docker stop'
+alias drm='docker rm'
+
+# Systemd
+alias sc='sudo systemctl'
+alias scs='sudo systemctl status'
+alias scr='sudo systemctl restart'
+alias scst='sudo systemctl stop'
+alias scstart='sudo systemctl start'
+alias sce='sudo systemctl enable'
+alias scd='sudo systemctl disable'
+alias jctl='sudo journalctl'
+alias jctlf='sudo journalctl -f'
+
+# ==============================
+# Autocompleado
+# ==============================
+
+mkdir -p "$HOME/.cache/zsh"
+
+autoload -Uz compinit
+compinit -d "$HOME/.cache/zsh/zcompdump"
+
+# Menu interactivo
+zstyle ':completion:*:*:*:*:*' menu select
+
+# Ignorar mayúsculas/minúsculas
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+
+# Mostrar descripciones
+zstyle ':completion:*' verbose yes
+
+# Agrupar resultados por categoría
+zstyle ':completion:*' group-name ''
+
+# Colores en las opciones
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+
+# Selección con las flechas
+zstyle ':completion:default' list-prompt '%S%M matches%s'
+
+# No insertar automáticamente una opción ambigua
+zstyle ':completion:*' insert-tab pending
+
+# Completar directorios de forma más cómoda
+zstyle ':completion:*' squeeze-slashes true
+
+# ==============================
+# Historial
+# ==============================
+
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=10000
+SAVEHIST=10000
+
+setopt hist_expire_dups_first
+setopt hist_ignore_dups
+setopt hist_ignore_space
+setopt hist_verify
+setopt hist_find_no_dups
+setopt hist_reduce_blanks
+setopt inc_append_history
+
+# forzar a zsh para que muestre el historial completo
+alias history="history 0"
+
+# ==============================
+# Colores del prompt
+# ==============================
+
+PROMPT_ORANGE='%F{208}'
+PROMPT_WHITE='%F{255}'
+PROMPT_GRAY='%F{245}'
+PROMPT_RESET='%f'
+
+
+# ==============================
+# Git
+# ==============================
+
+git_branch=""
+git_state=""
+
+update_git_status() {
+	git_branch=""
+	git_state=""
+
+	# Comprobar si estamos dentro de un repositorio
+	local branch
+	branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+	[[ -z "$branch" ]] && return
+
+	local staged=""
+	local unstaged=""
+	local ahead=0
+	local behind=0
+
+	# Cambios staged
+	git diff --quiet --cached 2>/dev/null || staged="+"
+
+	# Cambios sin stage
+	git diff --quiet 2>/dev/null || unstaged="!"
+
+	# Commits pendientes de subir/bajar
+	local upstream
+	upstream=$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)
+
+	if [[ -n "$upstream" ]]; then
+		ahead=$(git rev-list --count "${upstream}..HEAD" 2>/dev/null)
+		behind=$(git rev-list --count "HEAD..${upstream}" 2>/dev/null)
+	fi
+	
+	git_state="${staged}${unstaged}" 
+
+	[[ "$ahead" -gt 0 ]] && git_state+=" ↑${ahead}" 
+	[[ "$behind" -gt 0 ]] && git_state+=" ↓${behind}" 
+
+	# Repositorio completamente limpio 
+	if [[ -z "$git_state" ]]; then 
+		git_state="✓" 
+	fi 
+
+	git_branch=${branch}
+}
+
+autoload -Uz add-zsh-hook
+add-zsh-hook precmd update_git_status
+
+git_prompt() {
+    [[ -z "$git_branch" ]] && return
+
+    print -n "${PROMPT_ORANGE}${PROMPT_RESET} "
+    print -n "${PROMPT_WHITE}${git_branch}${PROMPT_RESET} "
+    print -n "${PROMPT_GRAY}${git_state}${PROMPT_RESET}"
+}
+
+# ==========================================
+# Entorno Python
+# ==========================================
+
+python_env_prompt() {
+    [[ -n "$VIRTUAL_ENV" ]] || return
+
+    print -n "${PROMPT_ORANGE}( ${VIRTUAL_ENV:t})${PROMPT_RESET}"
+}
+
+# ==============================
+# Prompt
+# ==============================
+
+# Prompt principal
+PROMPT="${PROMPT_ORANGE}${PROMPT_RESET} "
+#PROMPT+="%B${PROMPT_WHITE}%n${PROMPT_RESET}%b "
+#PROMPT+="${PROMPT_GRAY}֍${PROMPT_RESET} " 
+#PROMPT+="%B${PROMPT_WHITE}%m${PROMPT_RESET}%b " 
+PROMPT+="${PROMPT_WHITE}%(6~.%-1~/…/%4~.%5~)${PROMPT_RESET}" 
+PROMPT+=' $(git_prompt)'
+PROMPT+=$'\n' 
+PROMPT+="${PROMPT_ORANGE} ${PROMPT_RESET} "
+
+# Prompt derecho
+RPROMPT='$(python_env_prompt)%(?..%F{208} ✘ %?%f)'
+
+# =============================
+# Colores de comandos
+# =============================
+
+alias ls='ls --color=auto'
+alias grep='grep --color=auto'
+alias diff='diff --color=auto'
+alias ip='ip --color=auto'
+
+export VIRTUAL_ENV_DISABLE_PROMPT=1
+
+# =============================
+# PATH
+# =============================
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl"
+
+export PATH="$HOME/.local/bin:$PATH"
+
+typeset -U path PATH
+
+# =============================
+# mise
+# =============================
+
+eval "$(mise activate zsh)"
+export PATH="/usr/lib/qt6/bin:$PATH"

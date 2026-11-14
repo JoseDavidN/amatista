@@ -1,0 +1,55 @@
+/* ==========================================================
+   GTK - paleta Amatista
+   Funciona con el tema adw-gtk3-dark (GTK3) y con libadwaita (GTK4)
+   Afecta a pavucontrol, blueman, nm-connection-editor, etc.
+   ========================================================== */
+
+@define-color accent_color #d0a8ff;
+@define-color accent_bg_color #b98cff;
+@define-color accent_fg_color #2a1f3d;
+
+@define-color destructive_color #ff7a9a;
+@define-color destructive_bg_color #c4466c;
+@define-color destructive_fg_color #ffffff;
+
+@define-color success_color #9ee6b0;
+@define-color success_bg_color #3f8f63;
+@define-color success_fg_color #ffffff;
+
+@define-color warning_color #ffcf85;
+@define-color warning_bg_color #b8862e;
+@define-color warning_fg_color rgba(0, 0, 0, 0.8);
+
+@define-color error_color #ff7a9a;
+@define-color error_bg_color #c4466c;
+@define-color error_fg_color #ffffff;
+
+@define-color window_bg_color #2a1f3d;
+@define-color window_fg_color #f3eaff;
+
+@define-color view_bg_color #251b37;
+@define-color view_fg_color #f3eaff;
+
+@define-color headerbar_bg_color #34264b;
+@define-color headerbar_fg_color #f3eaff;
+@define-color headerbar_border_color #52406f;
+@define-color headerbar_backdrop_color @window_bg_color;
+@define-color headerbar_shade_color rgba(0, 0, 0, 0.36);
+
+@define-color sidebar_bg_color #301f45;
+@define-color sidebar_fg_color #f3eaff;
+@define-color sidebar_backdrop_color #2a1f3d;
+@define-color sidebar_shade_color rgba(0, 0, 0, 0.25);
+
+@define-color card_bg_color rgba(255, 255, 255, 0.05);
+@define-color card_fg_color #f3eaff;
+@define-color card_shade_color rgba(0, 0, 0, 0.36);
+
+@define-color dialog_bg_color #34264b;
+@define-color dialog_fg_color #f3eaff;
+
+@define-color popover_bg_color #34264b;
+@define-color popover_fg_color #f3eaff;
+
+@define-color shade_color rgba(0, 0, 0, 0.36);
+@define-color scrollbar_outline_color rgba(0, 0, 0, 0.5);

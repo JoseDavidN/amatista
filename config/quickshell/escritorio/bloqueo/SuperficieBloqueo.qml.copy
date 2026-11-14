@@ -1,0 +1,488 @@
+// ==========================================================
+// Diseno de la pantalla de bloqueo (una por monitor)
+// Cada vez que se bloquea se crea de nuevo, asi la animacion de entrada se repite
+// ==========================================================
+import QtQuick
+import QtQuick.Effects
+import Quickshell
+import Quickshell.Services.Mpris
+import Quickshell.Services.UPower
+import qs.Comun
+
+Rectangle {
+    id: root
+
+    required property ContextoBloqueo context
+
+    // ---------- Colores: vienen de Comun/Tema.qml ----------
+    readonly property color cFondo:   Tema.fondo
+    readonly property color cTarjeta: Tema.fondoTarjeta
+    readonly property color cCampo:   Tema.campo
+    readonly property color cBorde:   Tema.borde
+    readonly property color cTexto:   Tema.texto
+    readonly property color cSuave:   Tema.suave
+    readonly property color cTenue:   Tema.tenue
+    readonly property color cAcento:  Tema.acento
+    readonly property color cMorado:  Tema.morado
+    readonly property color cError:   Tema.error
+    readonly property color cAmbar:   Tema.ambar
+    readonly property color cOk:      Tema.exito
+
+    readonly property string fuente: Tema.fuente
+    readonly property string fuenteIconos: Tema.fuenteIconos
+
+    readonly property string home: Quickshell.env("HOME")
+    readonly property string usuario: Quickshell.env("USER")
+
+    color: cFondo
+
+    // ---------- Reloj ----------
+    SystemClock {
+        id: reloj
+        precision: SystemClock.Minutes
+    }
+
+    // ---------- Bateria (UPower) ----------
+    readonly property var bateria: UPower.displayDevice
+    readonly property bool hayBateria: bateria !== null && bateria.isLaptopBattery
+    readonly property int porcentaje: {
+        if (!hayBateria)
+            return 0;
+        const p = bateria.percentage;
+        return Math.round(p <= 1 ? p * 100 : p);
+    }
+    readonly property bool cargando: hayBateria && bateria.state === UPowerDeviceState.Charging
+    readonly property var iconosBateria: ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"]
+
+    // ---------- Musica (MPRIS) ----------
+    readonly property var reproductor: {
+        const lista = Mpris.players.values;
+        for (let i = 0; i < lista.length; i++) {
+            if (lista[i].isPlaying)
+                return lista[i];
+        }
+        return lista.length > 0 ? lista[0] : null;
+    }
+    readonly property real progreso: {
+        if (!reproductor || !reproductor.lengthSupported || reproductor.length <= 0)
+            return 0;
+        return Math.min(1, reproductor.position / reproductor.length);
+    }
+
+    // La posicion de MPRIS no se actualiza sola: se refresca cada segundo
+    Timer {
+        running: root.reproductor !== null && root.reproductor.isPlaying
+        interval: 1000
+        repeat: true
+        onTriggered: root.reproductor.positionChanged()
+    }
+
+    // ---------- Fondo ----------
+    // Se usa el fondo de pantalla (Tema.fondoPantalla) desenfocado;
+    // si no, se dibujan dos destellos de color.
+    Image {
+        id: imagenFondo
+        anchors.fill: parent
+        source: "file://" + Tema.fondoPantalla
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        visible: false
+    }
+
+    MultiEffect {
+        anchors.fill: parent
+        source: imagenFondo
+        visible: imagenFondo.status === Image.Ready
+        blurEnabled: true
+        blur: 1.0
+        blurMax: 64
+        brightness: -0.25
+    }
+
+    Rectangle {
+        visible: imagenFondo.status !== Image.Ready
+        width: 620; height: 620; radius: 310
+        x: -180; y: -160
+        color: root.cAcento
+        opacity: 0.10
+    }
+
+    Rectangle {
+        visible: imagenFondo.status !== Image.Ready
+        width: 560; height: 560; radius: 280
+        x: root.width - 380; y: root.height - 360
+        color: root.cMorado
+        opacity: 0.10
+    }
+
+    // ---------- Contenido (aparece con una animacion suave) ----------
+    Item {
+        id: contenido
+        anchors.fill: parent
+        opacity: 0
+        scale: 0.97
+
+        Component.onCompleted: entrada.start()
+
+        ParallelAnimation {
+            id: entrada
+            NumberAnimation { target: contenido; property: "opacity"; to: 1; duration: 450; easing.type: Easing.OutCubic }
+            NumberAnimation { target: contenido; property: "scale"; to: 1; duration: 450; easing.type: Easing.OutCubic }
+        }
+
+        // ----- Barra superior: estado -----
+        Row {
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.margins: 24
+            spacing: 8
+
+            Text {
+                text: "󰌾"
+                color: root.cAcento
+                font.family: root.fuenteIconos
+                font.pixelSize: 16
+            }
+            Text {
+                text: "Bloqueado"
+                color: root.cSuave
+                font.family: root.fuente
+                font.pixelSize: 14
+            }
+        }
+
+        Row {
+            visible: root.hayBateria
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: 24
+            spacing: 8
+
+            Text {
+                text: root.cargando ? "󰂄" : root.iconosBateria[Math.min(10, Math.floor(root.porcentaje / 10))]
+                color: root.cargando ? root.cAcento
+                     : root.porcentaje <= 15 ? root.cError
+                     : root.porcentaje <= 30 ? root.cAmbar
+                     : root.cOk
+                font.family: root.fuenteIconos
+                font.pixelSize: 16
+            }
+            Text {
+                text: root.porcentaje + "%"
+                color: root.cSuave
+                font.family: root.fuente
+                font.pixelSize: 14
+            }
+        }
+
+        // ----- Centro: reloj, usuario y contrasena -----
+        Column {
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: -30
+            spacing: 6
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: Qt.formatDateTime(reloj.date, "HH:mm")
+                color: root.cTexto
+                font.family: root.fuente
+                font.pixelSize: 120
+                font.weight: Font.Bold
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: reloj.date.toLocaleString(Qt.locale("es_CO"), "dddd, d 'de' MMMM")
+                color: root.cSuave
+                font.family: root.fuente
+                font.pixelSize: 20
+            }
+
+            Item { width: 1; height: 40 }
+
+            // Avatar: usa ~/.face si existe, si no la inicial del usuario
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 88; height: 88; radius: 44
+                color: root.cCampo
+                border.color: root.cAcento
+                border.width: 2
+
+                Text {
+                    anchors.centerIn: parent
+                    visible: foto.status !== Image.Ready
+                    text: root.usuario.charAt(0).toUpperCase()
+                    color: root.cAcento
+                    font.family: root.fuente
+                    font.pixelSize: 34
+                    font.weight: Font.Bold
+                }
+
+                Image {
+                    id: foto
+                    anchors.fill: parent
+                    anchors.margins: 4
+                    source: "file://" + root.home + "/.face"
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    visible: false
+                }
+
+                Item {
+                    id: mascaraFoto
+                    anchors.fill: foto
+                    visible: false
+                    layer.enabled: true
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: width / 2
+                    }
+                }
+
+                MultiEffect {
+                    anchors.fill: foto
+                    source: foto
+                    visible: foto.status === Image.Ready
+                    maskEnabled: true
+                    maskSource: mascaraFoto
+                }
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: root.usuario
+                color: root.cTexto
+                font.family: root.fuente
+                font.pixelSize: 16
+            }
+
+            Item { width: 1; height: 10 }
+
+            // Campo de contrasena
+            Rectangle {
+                id: campo
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 320; height: 50; radius: 14
+                color: root.cCampo
+                border.width: 1
+                border.color: root.context.showFailure ? root.cError
+                            : entradaTexto.activeFocus ? root.cAcento
+                            : root.cBorde
+
+                Behavior on border.color { ColorAnimation { duration: 200 } }
+
+                transform: Translate { id: sacudida }
+
+                Text {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 18
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: entradaTexto.text.length === 0
+                    text: root.context.unlockInProgress ? "Verificando..." : "Contraseña..."
+                    color: root.cTenue
+                    font.family: root.fuente
+                    font.pixelSize: 15
+                    font.italic: true
+                }
+
+                TextInput {
+                    id: entradaTexto
+                    anchors.left: parent.left
+                    anchors.right: boton.left
+                    anchors.leftMargin: 18
+                    anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    echoMode: TextInput.Password
+                    passwordCharacter: "\u2022"
+                    color: root.cTexto
+                    font.family: root.fuente
+                    font.pixelSize: 18
+                    font.letterSpacing: 2
+                    clip: true
+                    focus: true
+                    enabled: !root.context.unlockInProgress
+
+                    onTextChanged: root.context.currentText = text
+                    onAccepted: root.context.tryUnlock()
+                    Keys.onEscapePressed: text = ""
+                }
+
+                Rectangle {
+                    id: boton
+                    anchors.right: parent.right
+                    anchors.rightMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 38; height: 38; radius: 10
+                    color: zonaBoton.containsMouse ? Qt.lighter(root.cAcento, 1.1) : root.cAcento
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "󰁔"
+                        color: root.cFondo
+                        font.family: root.fuenteIconos
+                        font.pixelSize: 18
+                    }
+
+                    MouseArea {
+                        id: zonaBoton
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.context.tryUnlock()
+                    }
+                }
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: root.context.showFailure ? "Contraseña incorrecta"
+                    : root.context.unlockInProgress ? "Verificando..."
+                    : "Escribe tu contraseña y presiona Enter"
+                color: root.context.showFailure ? root.cError : root.cTenue
+                font.family: root.fuente
+                font.pixelSize: 13
+            }
+        }
+
+        // ----- Tarjeta de musica (solo si hay algo abierto) -----
+        Rectangle {
+            visible: root.reproductor !== null
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            anchors.margins: 28
+            width: 360; height: 96; radius: 18
+            color: root.cTarjeta
+            border.color: root.cBorde
+            border.width: 1
+
+            Rectangle {
+                id: portada
+                anchors.left: parent.left
+                anchors.leftMargin: 14
+                anchors.verticalCenter: parent.verticalCenter
+                width: 68; height: 68; radius: 12
+                color: root.cCampo
+
+                Image {
+                    id: imagenPortada
+                    anchors.fill: parent
+                    source: root.reproductor ? root.reproductor.trackArtUrl : ""
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    visible: status === Image.Ready
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    visible: imagenPortada.status !== Image.Ready
+                    text: "󰝚"
+                    color: root.cAmbar
+                    font.family: root.fuenteIconos
+                    font.pixelSize: 26
+                }
+            }
+
+            Column {
+                anchors.left: portada.right
+                anchors.leftMargin: 14
+                anchors.right: controles.left
+                anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 4
+
+                Text {
+                    width: parent.width
+                    text: root.reproductor ? (root.reproductor.trackTitle || "Sin título") : ""
+                    color: root.cTexto
+                    font.family: root.fuente
+                    font.pixelSize: 14
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    width: parent.width
+                    text: root.reproductor ? (root.reproductor.trackArtist || root.reproductor.identity) : ""
+                    color: root.cTenue
+                    font.family: root.fuente
+                    font.pixelSize: 12
+                    elide: Text.ElideRight
+                }
+
+                Item { width: 1; height: 4 }
+
+                Rectangle {
+                    width: parent.width
+                    height: 4; radius: 2
+                    color: root.cBorde
+
+                    Rectangle {
+                        width: parent.width * root.progreso
+                        height: parent.height
+                        radius: 2
+                        color: root.cAcento
+                        Behavior on width { NumberAnimation { duration: 900 } }
+                    }
+                }
+            }
+
+            Row {
+                id: controles
+                anchors.right: parent.right
+                anchors.rightMargin: 14
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 6
+
+                Repeater {
+                    model: [
+                        { icono: "󰒮", accion: "anterior" },
+                        { icono: "", accion: "pausa" },
+                        { icono: "󰒭", accion: "siguiente" }
+                    ]
+
+                    delegate: Text {
+                        required property var modelData
+                        text: modelData.accion === "pausa"
+                              ? (root.reproductor && root.reproductor.isPlaying ? "󰏤" : "󰐊")
+                              : modelData.icono
+                        color: zona.containsMouse ? root.cAcento : root.cTexto
+                        font.family: root.fuenteIconos
+                        font.pixelSize: modelData.accion === "pausa" ? 26 : 20
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        MouseArea {
+                            id: zona
+                            anchors.fill: parent
+                            anchors.margins: -4
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                const r = root.reproductor;
+                                if (!r) return;
+                                if (modelData.accion === "anterior" && r.canGoPrevious) r.previous();
+                                else if (modelData.accion === "siguiente" && r.canGoNext) r.next();
+                                else if (modelData.accion === "pausa" && r.canTogglePlaying) r.togglePlaying();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---------- Animacion de error: el campo tiembla ----------
+    SequentialAnimation {
+        id: animSacudida
+        NumberAnimation { target: sacudida; property: "x"; to: -14; duration: 50 }
+        NumberAnimation { target: sacudida; property: "x"; to: 14; duration: 70 }
+        NumberAnimation { target: sacudida; property: "x"; to: -8; duration: 60 }
+        NumberAnimation { target: sacudida; property: "x"; to: 0; duration: 50 }
+    }
+
+    Connections {
+        target: root.context
+        function onFailed() {
+            entradaTexto.text = "";
+            animSacudida.restart();
+        }
+    }
+}

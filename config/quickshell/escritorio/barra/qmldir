@@ -1,0 +1,12 @@
+module qs.barra
+Barra 1.0 Barra.qml
+Pildora 1.0 Pildora.qml
+Tooltip 1.0 Tooltip.qml
+Workspaces 1.0 Workspaces.qml
+ModuloBateria 1.0 ModuloBateria.qml
+ModuloAudio 1.0 ModuloAudio.qml
+ModuloRed 1.0 ModuloRed.qml
+ModuloBluetooth 1.0 ModuloBluetooth.qml
+ModuloReloj 1.0 ModuloReloj.qml
+ModuloHardware 1.0 ModuloHardware.qml
+ModuloMultimedia 1.0 ModuloMultimedia.qml
