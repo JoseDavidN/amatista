@@ -1,6 +1,6 @@
 hl.on("hyprland.start", function ()
-    -- Pantalla de bloqueo al encender: el inicio de sesión es automático
-    -- (tty1), así que la contraseña se pide aquí
+    -- Escritorio (barra, notificaciones, bloqueo). El inicio de sesión
+    -- lo hace greetd antes de llegar aquí
     hl.exec_cmd("qs -c escritorio")
 
     -- Agente de polkit: muestra la ventana de contraseña
@@ -13,7 +13,4 @@ hl.on("hyprland.start", function ()
     -- Historial del portapapeles (texto e imágenes)
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
-   
-    -- Temporal para conexion remota
-    hl.exec_cmd("wayvnc 127.0.0.1 5900")
 end)

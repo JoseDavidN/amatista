@@ -1,0 +1,70 @@
+#!/bin/sh
+# Cambio automático de la salida de audio (lo ejecuta el servicio de usuario
+# audio-automatico.service).
+#
+#   - Al conectar auriculares o parlantes en un conector (Headphones / Line),
+#     el sonido pasa a esa salida.
+#   - Al desconectarlos, vuelve a otra salida disponible (por ejemplo, el HDMI
+#     del monitor).
+#   - Elegir la salida a mano sigue funcionando: solo se cambia cuando se
+#     conecta o desconecta algo.
+
+# Salidas con un conector de auriculares o línea enchufado
+conectadas() {
+    pactl -f json list sinks 2>/dev/null | jq -r '
+        .[] | select(any(.ports[]?;
+            (.type == "Headphones" or .type == "Line") and .availability == "available"))
+        | .name' | sort
+}
+
+# Primera salida utilizable que no sea la indicada (para volver al desconectar)
+otra_salida() {
+    pactl -f json list sinks 2>/dev/null | jq -r --arg fuera "$1" '
+        [ .[] | select(.name != $fuera)
+              | select(([.ports[]?.availability] | length == 0)
+                       or any(.ports[]?; .availability != "not available")) ]
+        | .[0].name // empty'
+}
+
+# ¿La lista (una salida por línea) contiene la salida indicada?
+contiene() {
+    printf '%s\n' "$1" | grep -qxF -- "$2"
+}
+
+usar() {
+    [ -n "$1" ] && [ "$(pactl get-default-sink)" != "$1" ] && pactl set-default-sink "$1"
+}
+
+# Esperar a que PipeWire esté listo
+until pactl info >/dev/null 2>&1; do sleep 1; done
+
+antes=$(conectadas)
+# Al iniciar: si ya hay auriculares conectados, usarlos
+usar "$(echo "$antes" | head -n 1)"
+
+pactl subscribe | while read -r linea; do
+    case "$linea" in
+        *" on card "*|*" on sink "*) ;;
+        *) continue ;;
+    esac
+
+    ahora=$(conectadas)
+    [ "$ahora" = "$antes" ] && continue
+
+    actual=$(pactl get-default-sink)
+
+    # Salida recién conectada: usarla
+    nueva=$(printf '%s\n' "$ahora" | while read -r n; do
+        [ -n "$n" ] && ! contiene "$antes" "$n" && echo "$n"
+    done | head -n 1)
+
+    if [ -n "$nueva" ]; then
+        usar "$nueva"
+    elif contiene "$antes" "$actual" && ! contiene "$ahora" "$actual"; then
+        # Se desconectó la salida en uso: pasar a otra conectada o al HDMI
+        siguiente=$(printf '%s\n' "$ahora" | sed '/^$/d' | head -n 1)
+        [ -n "$siguiente" ] || siguiente=$(otra_salida "$actual")
+        usar "$siguiente"
+    fi
+    antes=$ahora
+done

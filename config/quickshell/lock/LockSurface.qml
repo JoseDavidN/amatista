@@ -81,7 +81,7 @@ Rectangle {
     Image {
         id: imagenFondo
         anchors.fill: parent
-        source: "file://" + root.home + "/.local/share/fondos/amatista.png"
+        source: "file://" + root.home + "/Imágenes/wallpaper/amatista.png"
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         visible: false

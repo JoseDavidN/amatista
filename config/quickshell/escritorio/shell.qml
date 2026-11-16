@@ -9,6 +9,7 @@
 //   Bloqueo             reemplaza a hyprlock
 //   Inactividad         reemplaza a hypridle
 //   OSD y portapapeles
+//   Ayuda de atajos     Super + F1
 // ==========================================================
 import Quickshell
 import qs.notificaciones
@@ -19,6 +20,7 @@ import qs.sistema
 import qs.osd
 import qs.portapapeles
 import qs.fondos
+import qs.ayuda
 
 ShellRoot {
     Bloqueo { id: bloqueo }
@@ -30,4 +32,5 @@ ShellRoot {
     Osd {}
     Portapapeles {}
     SelectorFondos {}
+    Ayuda {}
 }

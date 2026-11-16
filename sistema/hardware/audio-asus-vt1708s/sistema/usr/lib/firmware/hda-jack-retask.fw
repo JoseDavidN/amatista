@@ -1,0 +1,8 @@
+[codec]
+0x11060397 0x1043836c 0
+
+[pincfg]
+# Pin 0x1d = auriculares del panel frontal del chasis.
+# Original 0x0221401f; con el bit "sin detección de presencia" (0x100):
+# el panel frontal del chasis no avisa cuando se conectan auriculares.
+0x1d 0x0221411f

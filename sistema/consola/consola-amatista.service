@@ -1,0 +1,15 @@
+# Paleta Amatista para las consolas de texto (Ctrl+Alt+F2 ... F6).
+# Mismos colores que kitty; el fondo (color 0) es el morado oscuro del tema.
+[Unit]
+Description=Paleta Amatista en la consola
+DefaultDependencies=no
+After=systemd-vconsole-setup.service
+Before=getty.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/setvtrgb /etc/amatista/vtrgb
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target

@@ -1,0 +1,10 @@
+# greetd: gestor de inicio de sesión (como GDM en GNOME o SDDM en KDE)
+# Al encender abre la pantalla de inicio de sesión en la consola 1.
+
+[terminal]
+vt = 1
+
+[default_session]
+# Hyprland mínimo (ver sesion-greeter.sh), solo para mostrar el greeter de Quickshell
+command = "/etc/greetd/sesion-greeter.sh"
+user = "greeter"

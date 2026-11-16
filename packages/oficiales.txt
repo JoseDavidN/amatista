@@ -20,26 +20,64 @@ neovim
 zsh
 mise
 lazygit
+fzf
+zoxide
+eza
+fastfetch
 
 # Tema y fuentes
 adw-gtk-theme
+qt6ct
+archlinux-wallpaper
 ttf-jetbrains-mono-nerd
 noto-fonts
+noto-fonts-emoji
 
 # Utilidades que usan tus atajos y Quickshell
 wl-clipboard
 cliphist
 brightnessctl
+playerctl
+grim
+slurp
+satty
+hyprpicker
+hyprsunset
+gpu-screen-recorder
 libnotify
+xdg-user-dirs
 jq
+gum
 unzip
 
 # Audio, red y Bluetooth
 pipewire-pulse
 alsa-utils
 pavucontrol
+cava
 bluez
 bluez-utils
 blueman
 network-manager-applet
 upower
+
+# Arranque con el tema (Plymouth) e inicio de sesión (greetd + greeter de Quickshell)
+plymouth
+greetd
+
+# Gestor de archivos (Nautilus, GTK4) con miniaturas de video, USB/papelera y comprimidos
+nautilus
+file-roller
+gvfs
+ffmpegthumbnailer
+
+# Apps predeterminadas, livianas y con la paleta Amatista
+# (imágenes, video/audio, PDF; el texto se abre con Neovim en kitty)
+imv
+mpv
+zathura
+zathura-pdf-mupdf
+
+# Llavero de contraseñas (wifi, git, navegadores, claves SSH)
+gnome-keyring
+libsecret

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Nautilus: clic derecho > Scripts > Abrir terminal aquí
+# Abre kitty en la carpeta seleccionada o, si no hay ninguna, en la actual.
+dir=$(printf '%s\n' "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS" | sed -n '1p')
+if [ ! -d "$dir" ]; then
+    dir=$(python3 -c 'import sys, urllib.parse as u; print(u.unquote(u.urlparse(sys.argv[1]).path))' "$NAUTILUS_SCRIPT_CURRENT_URI")
+fi
+[ -d "$dir" ] || dir="$HOME"
+exec kitty --directory "$dir"

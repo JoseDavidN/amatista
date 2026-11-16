@@ -10,3 +10,9 @@ ModuloBluetooth 1.0 ModuloBluetooth.qml
 ModuloReloj 1.0 ModuloReloj.qml
 ModuloHardware 1.0 ModuloHardware.qml
 ModuloMultimedia 1.0 ModuloMultimedia.qml
+ModuloLuzNocturna 1.0 ModuloLuzNocturna.qml
+ModuloGrabacion 1.0 ModuloGrabacion.qml
+ModuloPerfilEnergia 1.0 ModuloPerfilEnergia.qml
+singleton ServicioLuzNocturna 1.0 ServicioLuzNocturna.qml
+singleton ServicioGrabacion 1.0 ServicioGrabacion.qml
+singleton ServicioPerfilEnergia 1.0 ServicioPerfilEnergia.qml

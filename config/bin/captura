@@ -1,0 +1,52 @@
+#!/bin/sh
+# Capturas de pantalla (atajos en binds.lua)
+#
+#   captura area       elegir un área con el mouse (Imprimir)
+#   captura pantalla   el monitor donde está el mouse (Shift + Imprimir)
+#   captura ventana    la ventana activa (Alt + Imprimir)
+#
+# Guarda en Imágenes/Capturas (carpeta de imágenes del usuario, xdg-user-dir), copia la imagen al portapapeles y avisa con
+# botones: Abrir (visor), Editar (satty) y Abrir carpeta (Nautilus).
+
+CARPETA="$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Imágenes")/Capturas"
+ARCHIVO="$CARPETA/Captura_$(date +%Y-%m-%d_%H-%M-%S).png"
+mkdir -p "$CARPETA"
+
+# Colores de slurp en RRGGBBAA, con la paleta Amatista
+area() {
+    slurp -d -b 1e153066 -c b98cffff -s b98cff22 -w 2
+}
+
+case "$1" in
+    area)
+        region=$(area) || exit 0          # Esc: cancelar sin avisar
+        grim -g "$region" "$ARCHIVO"
+        ;;
+    pantalla)
+        monitor=$(hyprctl -j monitors | jq -r '.[] | select(.focused) | .name')
+        grim -o "$monitor" "$ARCHIVO"
+        ;;
+    ventana)
+        region=$(hyprctl -j activewindow | jq -r 'if .at then "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])" else empty end')
+        [ -n "$region" ] || { notify-send -a Captura "Captura" "No hay una ventana activa"; exit 1; }
+        grim -g "$region" "$ARCHIVO"
+        ;;
+    *)
+        echo "Uso: captura area | pantalla | ventana" >&2
+        exit 1
+        ;;
+esac || { notify-send -a Captura "Captura" "No se pudo tomar la captura"; exit 1; }
+
+wl-copy --type image/png < "$ARCHIVO"
+
+# Notificación con botones; notify-send espera hasta que se elige uno o se cierra
+accion=$(notify-send -a Captura -i "$ARCHIVO" \
+    -A abrir=Abrir -A editar=Editar -A carpeta="Abrir carpeta" \
+    "Captura guardada" "$(basename "$ARCHIVO") · copiada al portapapeles")
+
+case "$accion" in
+    abrir)   xdg-open "$ARCHIVO" ;;
+    # satty: anotar, recortar, flechas, texto... (config en ~/.config/satty)
+    editar)  satty --filename "$ARCHIVO" ;;
+    carpeta) nautilus --select "$ARCHIVO" ;;
+esac

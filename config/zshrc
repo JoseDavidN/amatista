@@ -1,11 +1,13 @@
-# Archivo de configuració nzsh
+# Archivo de configuración zsh
 
 # ===============================
 # zsh - devstar
 # ===============================
 
 # Simbolo principal del prompt
-prompt_symbol=֍ 
+# Doble flecha (Nerd Font U+F101) de la línea de escritura:
+# lila si el último comando salió bien, rojo si falló
+prompt_symbol=
 
 # ===============================
 # Opciones de ZSH
@@ -54,9 +56,9 @@ bindkey '^[[Z' undo                     # shift + tab deshacer ultima accion
 alias ..='cd ../'
 alias ...='cd ../..'
 
-# Listado
+# Listado (si eza está instalado se redefinen en "Integraciones opcionales")
 alias ll='ls -lahF'
-alias la='la -A'
+alias la='ls -A'
 
 # Git - básicos
 alias gs='git status'
@@ -112,8 +114,20 @@ alias jctlf='sudo journalctl -f'
 
 mkdir -p "$HOME/.cache/zsh"
 
+# compinit es lo más caro del arranque: la auditoría de seguridad (compaudit)
+# solo se hace una vez al día; el resto de inicios reutiliza el volcado (-C).
+# Si instalas un paquete y no aparece su autocompletado: rm ~/.cache/zsh/zcompdump*
 autoload -Uz compinit
-compinit -d "$HOME/.cache/zsh/zcompdump"
+_zcd="$HOME/.cache/zsh/zcompdump"
+if [[ -n $_zcd(#qN.mh-24) ]]; then
+	compinit -C -d "$_zcd"
+else
+	compinit -d "$_zcd"
+	command touch "$_zcd"
+fi
+# Volcado compilado: carga más rápido
+[[ $_zcd.zwc -nt $_zcd ]] || zcompile "$_zcd" 2>/dev/null
+unset _zcd
 
 # Menu interactivo
 zstyle ':completion:*:*:*:*:*' menu select
@@ -127,8 +141,7 @@ zstyle ':completion:*' verbose yes
 # Agrupar resultados por categoría
 zstyle ':completion:*' group-name ''
 
-# Colores en las opciones
-zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+# Colores en las opciones: se definen junto a LS_COLORS (más abajo)
 
 # Selección con las flechas
 zstyle ':completion:default' list-prompt '%S%M matches%s'
@@ -159,102 +172,136 @@ setopt inc_append_history
 alias history="history 0"
 
 # ==============================
-# Colores del prompt
+# Colores del prompt (paleta Amatista)
 # ==============================
 
-PROMPT_ORANGE='%F{208}'
-PROMPT_WHITE='%F{255}'
-PROMPT_GRAY='%F{245}'
+# Los mismos tonos que Tema.qml / kitty/amatista.conf, en truecolor.
+# En terminales sin truecolor (TTY) zsh/nearcolor los aproxima a 256 colores.
+[[ $COLORTERM == (truecolor|24bit) ]] || zmodload zsh/nearcolor 2>/dev/null
+
+PROMPT_TEXTO='%F{#f3eaff}'
+PROMPT_SUAVE='%F{#d4c2f0}'
+PROMPT_TENUE='%F{#a08cc0}'
+PROMPT_ACENTO='%F{#b98cff}'
+PROMPT_MORADO='%F{#d0a8ff}'
+PROMPT_ROSA='%F{#ff9ad5}'
+PROMPT_CIAN='%F{#8fd3ff}'
+PROMPT_VERDE='%F{#9ee6b0}'
+PROMPT_AMBAR='%F{#ffcf85}'
+PROMPT_ERROR='%F{#ff7a9a}'
 PROMPT_RESET='%f'
 
-
 # ==============================
-# Git
+# Git (un solo proceso por pintado)
 # ==============================
 
-git_branch=""
-git_state=""
-
-update_git_status() {
-	git_branch=""
-	git_state=""
-
-	# Comprobar si estamos dentro de un repositorio
-	local branch
-	branch=$(git symbolic-ref --short HEAD 2>/dev/null)
-
-	[[ -z "$branch" ]] && return
-
-	local staged=""
-	local unstaged=""
-	local ahead=0
-	local behind=0
-
-	# Cambios staged
-	git diff --quiet --cached 2>/dev/null || staged="+"
-
-	# Cambios sin stage
-	git diff --quiet 2>/dev/null || unstaged="!"
-
-	# Commits pendientes de subir/bajar
-	local upstream
-	upstream=$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)
-
-	if [[ -n "$upstream" ]]; then
-		ahead=$(git rev-list --count "${upstream}..HEAD" 2>/dev/null)
-		behind=$(git rev-list --count "HEAD..${upstream}" 2>/dev/null)
-	fi
-	
-	git_state="${staged}${unstaged}" 
-
-	[[ "$ahead" -gt 0 ]] && git_state+=" ↑${ahead}" 
-	[[ "$behind" -gt 0 ]] && git_state+=" ↓${behind}" 
-
-	# Repositorio completamente limpio 
-	if [[ -z "$git_state" ]]; then 
-		git_state="✓" 
-	fi 
-
-	git_branch=${branch}
-}
-
+# En cada precmd se ejecuta UNA vez "git status --porcelain=v2 --branch" y se
+# deja el resultado en $git_prompt_info (el prompt no lanza subshells).
+# Fuera de un repositorio no se lanza ningún proceso: el .git se busca
+# subiendo directorios con zsh puro.
+#   +  cambios en stage (verde)      !  cambios sin stage (ámbar)
+#   ?  archivos sin seguimiento      ✓  repositorio limpio
+#   ↑n ↓n  commits por subir / bajar (cian)
+#   rebase / merge / cherry-pick en curso (rojo)
 autoload -Uz add-zsh-hook
-add-zsh-hook precmd update_git_status
 
-git_prompt() {
-    [[ -z "$git_branch" ]] && return
+git_prompt_info=""
 
-    print -n "${PROMPT_ORANGE}${PROMPT_RESET} "
-    print -n "${PROMPT_WHITE}${git_branch}${PROMPT_RESET} "
-    print -n "${PROMPT_GRAY}${git_state}${PROMPT_RESET}"
+# Deja en $REPLY el gitdir del repositorio actual (vacío si no hay)
+_git_buscar_gitdir() {
+	REPLY=""
+	local dir=$PWD linea
+	while true; do
+		if [[ -d $dir/.git ]]; then
+			REPLY=$dir/.git
+			return 0
+		elif [[ -f $dir/.git ]]; then
+			# worktrees y submódulos: el .git es un archivo "gitdir: <ruta>"
+			read -r linea < "$dir/.git"
+			REPLY=${linea#gitdir: }
+			[[ $REPLY == /* ]] || REPLY=$dir/$REPLY
+			return 0
+		fi
+		[[ -z $dir || $dir == / ]] && return 1
+		dir=${dir:h}
+	done
 }
 
-# ==========================================
-# Entorno Python
-# ==========================================
+actualizar_git_prompt() {
+	git_prompt_info=""
+	_git_buscar_gitdir || return
 
-python_env_prompt() {
-    [[ -n "$VIRTUAL_ENV" ]] || return
+	local gitdir=$REPLY linea rama oid
+	local -i ahead=0 behind=0 staged=0 unstaged=0 untracked=0
 
-    print -n "${PROMPT_ORANGE}( ${VIRTUAL_ENV:t})${PROMPT_RESET}"
+	# Una única llamada; --no-optional-locks evita bloquear el índice
+	for linea in ${(f)"$(git --no-optional-locks status --porcelain=v2 --branch 2>/dev/null)"}; do
+		case $linea in
+			'# branch.head '*) rama=${linea#\# branch.head } ;;
+			'# branch.oid '*)  oid=${linea#\# branch.oid } ;;
+			'# branch.ab '*)
+				local -a ab=(${=linea#\# branch.ab })
+				ahead=${ab[1]#+}; behind=${ab[2]#-} ;;
+			'? '*) untracked=1 ;;
+			[12u]' '*)
+				# XY: X = stage, Y = árbol de trabajo ("." = sin cambios)
+				[[ ${linea[3]} != . ]] && staged=1
+				[[ ${linea[4]} != . ]] && unstaged=1 ;;
+		esac
+	done
+	[[ -z $rama ]] && return   # git falló (repositorio dañado, etc.)
+
+	# HEAD separado: mostrar el commit abreviado
+	[[ $rama == '(detached)' ]] && rama=${oid[1,7]}
+
+	local estado=""
+	(( staged ))    && estado+="${PROMPT_VERDE}+"
+	(( unstaged ))  && estado+="${PROMPT_AMBAR}!"
+	(( untracked )) && estado+="${PROMPT_TENUE}?"
+	[[ -z $estado ]] && estado="${PROMPT_VERDE}✓"
+	(( ahead > 0 ))  && estado+=" ${PROMPT_CIAN}↑${ahead}"
+	(( behind > 0 )) && estado+=" ${PROMPT_CIAN}↓${behind}"
+
+	# Operación en curso: solo comprobaciones de archivos, sin procesos
+	local accion=""
+	if [[ -e $gitdir/rebase-merge || -e $gitdir/rebase-apply ]]; then
+		accion=" ${PROMPT_ERROR}rebase"
+	elif [[ -e $gitdir/MERGE_HEAD ]]; then
+		accion=" ${PROMPT_ERROR}merge"
+	elif [[ -e $gitdir/CHERRY_PICK_HEAD ]]; then
+		accion=" ${PROMPT_ERROR}cherry-pick"
+	fi
+
+	# "%" en el nombre de la rama se escapa para que no se interprete en el prompt
+	git_prompt_info=" ${PROMPT_ROSA}${PROMPT_RESET} ${PROMPT_SUAVE}${rama//\%/%%}${accion} ${estado}${PROMPT_RESET}"
 }
+
+add-zsh-hook precmd actualizar_git_prompt
 
 # ==============================
 # Prompt
 # ==============================
 
-# Prompt principal
-PROMPT="${PROMPT_ORANGE}${PROMPT_RESET} "
-#PROMPT+="%B${PROMPT_WHITE}%n${PROMPT_RESET}%b "
-#PROMPT+="${PROMPT_GRAY}֍${PROMPT_RESET} " 
-#PROMPT+="%B${PROMPT_WHITE}%m${PROMPT_RESET}%b " 
-PROMPT+="${PROMPT_WHITE}%(6~.%-1~/…/%4~.%5~)${PROMPT_RESET}" 
-PROMPT+=' $(git_prompt)'
-PROMPT+=$'\n' 
-PROMPT+="${PROMPT_ORANGE} ${PROMPT_RESET} "
+# Línea 1:  ~/ruta/abreviada  rama +!? ↑1
+# Línea 2: ֍  (acento si el último comando terminó bien, rojo si falló)
+#
+# Ruta: con 6 o más niveles muestra el primero, "…" y los 4 últimos.
+# Gema del tema Amatista (Nerd Font U+F0B8A)
+PROMPT="${PROMPT_ACENTO}󰮊${PROMPT_RESET} "
+#PROMPT+="%B${PROMPT_TEXTO}%n${PROMPT_RESET}%b "
+#PROMPT+="%B${PROMPT_TEXTO}%m${PROMPT_RESET}%b "
+# Ruta en cian y negrita: contrasta con el lila del icono y el rosa de git
+PROMPT+="%B${PROMPT_CIAN}%(6~.%-1~/…/%4~.%5~)${PROMPT_RESET}%b"
+PROMPT+='${git_prompt_info}'
+PROMPT+=$'\n'
+PROMPT+="%B%(?.${PROMPT_ACENTO}.${PROMPT_ERROR})${prompt_symbol}${PROMPT_RESET}%b "
 
-# Prompt derecho
-RPROMPT='$(python_env_prompt)%(?..%F{208} ✘ %?%f)'
+# Prompt derecho: entorno Python activo y código de salida si falló
+RPROMPT='${VIRTUAL_ENV:+${PROMPT_CIAN} ${VIRTUAL_ENV:t}${PROMPT_RESET} }'
+RPROMPT+="%(?..${PROMPT_ERROR}✘ %?${PROMPT_RESET})"
+
+# Prompt de continuación (bucles, comillas sin cerrar...)
+PROMPT2="${PROMPT_TENUE}%_ ›${PROMPT_RESET} "
 
 # =============================
 # Colores de comandos
@@ -283,3 +330,97 @@ typeset -U path PATH
 
 eval "$(mise activate zsh)"
 export PATH="/usr/lib/qt6/bin:$PATH"
+
+# =============================
+# Colores de archivos (LS_COLORS)
+# =============================
+
+# Definido a mano (sin lanzar dircolors) con los ANSI del tema kitty:
+#   35 = acento #b98cff (directorios)   32 = verde #9ee6b0 (ejecutables)
+#   36 = cian #8fd3ff (enlaces)         31 = error #ff7a9a (enlaces rotos)
+#   33 = ambar #ffcf85 (comprimidos, dispositivos)  95 = morado (multimedia)
+# Lo usan ls, eza y el menú de autocompletado (list-colors).
+LS_COLORS='rs=0:di=1;35:ln=36:mh=36:pi=33:so=33:do=33:bd=1;33:cd=1;33:or=31:mi=31:su=1;31:sg=1;31:ca=1;31:tw=1;35;40:ow=1;35:st=1;35:ex=1;32'
+LS_COLORS+=':*.tar=33:*.gz=33:*.tgz=33:*.xz=33:*.zst=33:*.bz2=33:*.zip=33:*.7z=33:*.rar=33:*.deb=33:*.rpm=33:*.pkg.tar.zst=33'
+LS_COLORS+=':*.png=95:*.jpg=95:*.jpeg=95:*.gif=95:*.webp=95:*.svg=95:*.mp4=95:*.mkv=95:*.webm=95:*.mp3=95:*.flac=95:*.ogg=95:*.wav=95'
+LS_COLORS+=':*~=90:*.bak=90:*.swp=90:*.tmp=90'
+export LS_COLORS
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+
+# =============================
+# Integraciones opcionales
+# =============================
+
+# Cada herramienta solo se carga si está instalada. Para no lanzar procesos en
+# cada inicio, la salida de "<herramienta> init" se guarda en ~/.cache/zsh/ y
+# solo se regenera cuando el binario es más nuevo que la caché (actualización).
+#   _cargar_cache <nombre-cache> <binario> <orden completa...>
+_cargar_cache() {
+	local nombre=$1 binario=$commands[$2]
+	local cache="$HOME/.cache/zsh/$nombre.zsh"
+	shift 2
+	if [[ ! -s $cache || $binario -nt $cache ]]; then
+		if "$@" >| "$cache.tmp" 2>/dev/null && [[ -s $cache.tmp ]]; then
+			command mv -f "$cache.tmp" "$cache"
+			zcompile "$cache" 2>/dev/null
+		else
+			command rm -f "$cache.tmp"
+			return 1
+		fi
+	fi
+	source "$cache"
+}
+
+# ----- fzf: Ctrl+R historial, Ctrl+T archivos, Alt+C directorios -----
+if (( $+commands[fzf] )); then
+	export FZF_DEFAULT_OPTS="\
+--height=40% --layout=reverse --border=rounded --info=inline-right \
+--prompt='${prompt_symbol} ' --pointer='▶' --marker='✓' --separator='─' \
+--color=bg:-1,bg+:#52406f,gutter:-1 \
+--color=fg:#d4c2f0,fg+:#f3eaff,hl:#ff9ad5,hl+:#ff9ad5 \
+--color=info:#a08cc0,prompt:#b98cff,pointer:#ff9ad5,marker:#9ee6b0,spinner:#d0a8ff \
+--color=header:#8fd3ff,border:#52406f,label:#b98cff,query:#f3eaff,separator:#52406f,scrollbar:#6b5a8a"
+
+	# fd es más rápido que find y respeta .gitignore (opcional)
+	if (( $+commands[fd] )); then
+		export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
+		export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+		export FZF_ALT_C_COMMAND='fd --type d --hidden --follow --exclude .git'
+	fi
+
+	# Vistas previas (solo si las herramientas existen)
+	(( $+commands[bat] )) && export FZF_CTRL_T_OPTS="--preview 'bat --color=always --style=numbers --line-range=:200 {}'"
+	(( $+commands[eza] )) && export FZF_ALT_C_OPTS="--preview 'eza --tree --level=2 --icons=always --color=always {}'"
+
+	# fzf >= 0.48 genera sus atajos con "fzf --zsh"; si no, scripts del paquete
+	if ! _cargar_cache fzf fzf fzf --zsh; then
+		[[ -r /usr/share/fzf/key-bindings.zsh ]] && source /usr/share/fzf/key-bindings.zsh
+		[[ -r /usr/share/fzf/completion.zsh ]] && source /usr/share/fzf/completion.zsh
+	fi
+fi
+
+# ----- eza: ls moderno con iconos Nerd Font -----
+if (( $+commands[eza] )); then
+	# Colores propios de eza (el resto los toma de LS_COLORS):
+	# permisos, tamaños, usuario, fechas, git y la puntuación en tonos del tema
+	export EZA_COLORS='ur=33:uw=31:ux=32:ue=32:gr=33:gw=31:gx=32:tr=33:tw=31:tx=32:su=1;31:sf=1;31:xa=36'
+	EZA_COLORS+=':sn=35:sb=90:uu=37:uR=1;31:un=90:gu=37:gR=1;31:gn=90:da=90:hd=4;37:lp=36'
+	EZA_COLORS+=':ga=32:gm=33:gd=31:gv=36:gt=35:gi=90:gc=1;31:xx=90'
+
+	alias ls='eza --icons=auto --color=auto --group-directories-first'
+	alias ll='eza -lah --icons=auto --color=auto --group-directories-first --git --time-style=relative'
+	alias la='eza -a --icons=auto --color=auto --group-directories-first'
+	alias lt='eza --tree --level=2 --icons=auto --color=auto --group-directories-first --git-ignore'
+fi
+
+# ----- zoxide: z <parte-del-nombre> salta a directorios frecuentes, zi interactivo -----
+# Debe cargarse después de compinit (para el autocompletado de z)
+(( $+commands[zoxide] )) && _cargar_cache zoxide zoxide zoxide init zsh
+
+unfunction _cargar_cache
+
+# =============================
+# fastfetch (a mano, no al abrir cada terminal: rendimiento)
+# =============================
+
+(( $+commands[fastfetch] )) && alias ff='fastfetch'

@@ -51,8 +51,9 @@ Scope {
         } else if (o.id === "suspender") {
             Quickshell.execDetached(["sh", "-c", "\"$HOME/.local/bin/bloquear\" & sleep 1; systemctl suspend"]);
         } else if (o.id === "salir") {
-            // Con uwsm se cierra con "uwsm stop"; si no, se termina la sesion de logind
-            Quickshell.execDetached(["sh", "-c", "if command -v uwsm >/dev/null 2>&1 && uwsm check is-active >/dev/null 2>&1; then uwsm stop; else loginctl terminate-session \"$XDG_SESSION_ID\"; fi"]);
+            // Cierra Hyprland de forma ordenada; greetd vuelve a mostrar el inicio de sesion.
+            // Con uwsm se usa "uwsm stop"; si Hyprland no responde, se termina la sesion de logind.
+            Quickshell.execDetached(["sh", "-c", "if command -v uwsm >/dev/null 2>&1 && uwsm check is-active >/dev/null 2>&1; then uwsm stop; else hyprctl dispatch 'hl.dsp.exit()' || loginctl terminate-session \"$XDG_SESSION_ID\"; fi"]);
         } else if (o.id === "reiniciar") {
             Quickshell.execDetached(["systemctl", "reboot"]);
         } else if (o.id === "apagar") {
@@ -163,7 +164,7 @@ Scope {
                          : elegido ? (modelData.peligro ? Tema.conAlfa(Tema.error, 0.30) : Tema.acento)
                          : zona.containsMouse ? Tema.campoHover
                          : Tema.campo
-                    border.width: elegido && !confirmado ? 0 : 1
+                    border.width: elegido && !confirmando ? 0 : 1
                     border.color: modelData.peligro ? Tema.conAlfa(Tema.error, 0.45) : Tema.borde
                     scale: zona.pressed ? 0.94 : elegido ? 1.06 : 1
 

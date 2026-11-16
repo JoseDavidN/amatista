@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Logo del tema Plymouth "Amatista": una gema facetada en tonos lila.
+     La luz entra desde arriba a la izquierda; el halo trasero es muy tenue. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="300" viewBox="-40 -40 280 300">
+  <defs>
+    <filter id="halo" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+    <linearGradient id="brillo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f3eaff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#f3eaff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- Halo suave detrás de la gema -->
+  <polygon points="55,30 145,30 185,80 100,205 15,80" fill="#b98cff" opacity="0.35" filter="url(#halo)"/>
+  <g stroke="#f3eaff" stroke-opacity="0.28" stroke-width="1.5" stroke-linejoin="round">
+    <!-- Corona (parte superior) -->
+    <polygon points="55,30 15,80 60,80"   fill="#d0a8ff"/>
+    <polygon points="55,30 60,80 100,30"  fill="#e4d0ff"/>
+    <polygon points="100,30 60,80 140,80" fill="#c39bff"/>
+    <polygon points="100,30 140,80 145,30" fill="#a77ae8"/>
+    <polygon points="145,30 140,80 185,80" fill="#8f63d6"/>
+    <!-- Pabellón (parte inferior) -->
+    <polygon points="15,80 60,80 100,205"  fill="#a074e6"/>
+    <polygon points="60,80 140,80 100,205" fill="#b98cff"/>
+    <polygon points="140,80 185,80 100,205" fill="#6f4bb0"/>
+  </g>
+  <!-- Reflejo en la faceta superior izquierda -->
+  <polygon points="55,30 60,80 100,30" fill="url(#brillo)"/>
+  <!-- Destello rosa en la arista -->
+  <circle cx="60" cy="80" r="3" fill="#ff9ad5" opacity="0.8"/>
+</svg>

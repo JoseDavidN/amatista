@@ -1,0 +1,63 @@
+#!/bin/sh
+# Fondos de pantalla (lo usa el selector de Quickshell, Super + W)
+#
+#   fondos listar              carpeta --- imágenes --- fondo escritorio --- fondo bloqueo
+#   fondos escritorio <ruta>   aplica el fondo al instante y lo guarda en hyprpaper.conf
+#   fondos bloqueo <ruta>      fondo de la pantalla de bloqueo
+
+CARPETA="$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Imágenes")/wallpaper"
+ESTADO="$HOME/.local/state/quickshell"
+CONF_HYPRPAPER="$HOME/.config/hypr/hyprpaper.conf"
+PREDETERMINADO="$CARPETA/amatista.png"
+
+fondo_escritorio() {
+    ruta=$(sed -n 's/^[[:space:]]*path[[:space:]]*=[[:space:]]*//p' "$CONF_HYPRPAPER" 2>/dev/null | head -n 1)
+    case "$ruta" in "~/"*) ruta="$HOME/${ruta#\~/}" ;; esac
+    echo "${ruta:-$PREDETERMINADO}"
+}
+
+fondo_bloqueo() {
+    ruta=$(cat "$ESTADO/fondo-bloqueo" 2>/dev/null)
+    echo "${ruta:-$PREDETERMINADO}"
+}
+
+case "$1" in
+    listar)
+        echo "$CARPETA"
+        echo "---"
+        find "$CARPETA" -maxdepth 1 -type f \
+            \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \) \
+            -printf '%f\n' 2>/dev/null | sort
+        echo "---"
+        fondo_escritorio
+        echo "---"
+        fondo_bloqueo
+        ;;
+
+    escritorio)
+        [ -f "$2" ] || { echo "No existe: $2" >&2; exit 1; }
+        hyprctl hyprpaper wallpaper ",$2,cover" >/dev/null
+        # Guardar para el próximo inicio
+        cat > "$CONF_HYPRPAPER" <<EOF
+# Sin la frase aleatoria sobre el fondo
+splash = false
+
+wallpaper {
+    monitor =
+    path = $2
+    fit_mode = cover
+}
+EOF
+        ;;
+
+    bloqueo)
+        [ -f "$2" ] || { echo "No existe: $2" >&2; exit 1; }
+        mkdir -p "$ESTADO"
+        printf '%s\n' "$2" > "$ESTADO/fondo-bloqueo"
+        ;;
+
+    *)
+        echo "Uso: fondos listar | escritorio <ruta> | bloqueo <ruta>" >&2
+        exit 1
+        ;;
+esac

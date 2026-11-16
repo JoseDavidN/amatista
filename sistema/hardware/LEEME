@@ -1,0 +1,10 @@
+Correcciones de hardware que el instalador aplica solas.
+
+Cada carpeta es una corrección:
+  detectar      script: termina en 0 si este equipo la necesita
+  descripcion   una línea que muestra el instalador
+  sistema/      archivos que se copian a / (con sudo)
+  config/       archivos que se copian a ~/.config
+  paquetes.txt  paquetes extra (opcional)
+
+El tema es el mismo para todos los equipos; esto solo corrige hardware concreto.

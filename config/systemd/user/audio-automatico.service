@@ -1,0 +1,12 @@
+[Unit]
+Description=Cambio automático de la salida de audio al conectar auriculares
+After=pipewire-pulse.service wireplumber.service
+Wants=pipewire-pulse.service
+
+[Service]
+ExecStart=%h/.local/bin/audio-automatico
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

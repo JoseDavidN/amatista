@@ -96,7 +96,7 @@ Rectangle {
     Image {
         id: imagenFondo
         anchors.fill: parent
-        source: "file://" + Tema.fondoPantalla
+        source: "file://" + root.rutaFondo
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         visible: false

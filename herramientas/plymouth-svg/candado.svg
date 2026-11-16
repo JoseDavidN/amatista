@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Icono de candado para el diálogo del disco cifrado. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="72" viewBox="0 0 64 72">
+  <path d="M18 32 V22 a14 14 0 0 1 28 0 V32" fill="none" stroke="#d0a8ff" stroke-width="6" stroke-linecap="round"/>
+  <rect x="6" y="30" width="52" height="38" rx="10" fill="#b98cff"/>
+  <circle cx="32" cy="46" r="5" fill="#1e1530"/>
+  <rect x="29.5" y="48" width="5" height="10" rx="2.5" fill="#1e1530"/>
+</svg>

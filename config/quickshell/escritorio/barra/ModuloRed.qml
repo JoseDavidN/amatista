@@ -14,6 +14,8 @@ Pildora {
 
     property string tipo: "ninguna"   // "wifi", "cable" o "ninguna"
     property int senal: 0
+    // En pantallas angostas solo el icono; la IP o la señal van en el tooltip
+    property bool compacta: false
     property string ip: ""
 
     // nmcli separa con ":" y escapa los ":" de los valores como "\\:"
@@ -84,7 +86,9 @@ Pildora {
 
     icono: tipo === "wifi" ? "󰖩" : tipo === "cable" ? "󰈀" : ""
     colorIcono: tipo === "ninguna" ? Tema.error : Tema.ambar
-    texto: tipo === "wifi" ? senal + "%" : tipo === "cable" ? (ip || "cable") : "sin red"
+    readonly property string detalle: tipo === "wifi" ? senal + "%" : tipo === "cable" ? (ip || "cable") : "sin red"
+    texto: compacta ? "" : detalle
+    tooltip: compacta ? detalle : ""
 
     PanelRed {
         id: panel

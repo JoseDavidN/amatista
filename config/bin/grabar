@@ -1,0 +1,123 @@
+#!/bin/sh
+# Grabación de pantalla (atajos en binds.lua, indicador en la barra)
+#
+#   grabar iniciar [pantalla|area]   empezar a grabar (por defecto, pantalla)
+#   grabar detener                   terminar y guardar
+#   grabar alternar [pantalla|area]  iniciar o detener según el estado
+#   grabar estado                    "grabando <segundos> <archivo>" o "detenido"
+#
+# Usa gpu-screen-recorder (codifica por hardware con VA-API); si no está
+# instalado, recurre a wf-recorder (sin audio).
+# Guarda en Vídeos/Grabaciones (carpeta de videos del usuario, xdg-user-dir) y avisa con la ruta al terminar.
+#
+# Mientras graba, el archivo $XDG_RUNTIME_DIR/grabacion contiene
+# "<pid> <inicio en epoch> <archivo>"; vacío cuando no graba. La barra lo
+# vigila con FileView, así que no hace falta sondear procesos.
+#
+# Variables opcionales: GRABAR_FPS (30), GRABAR_AUDIO (default_output; "no" = sin audio)
+
+CARPETA="$(xdg-user-dir VIDEOS 2>/dev/null || echo "$HOME/Vídeos")/Grabaciones"
+ESTADO="${XDG_RUNTIME_DIR:-/tmp}/grabacion"
+REGISTRO="${XDG_RUNTIME_DIR:-/tmp}/grabacion.log"
+FPS="${GRABAR_FPS:-30}"
+AUDIO="${GRABAR_AUDIO:-default_output}"
+
+avisar() {
+    notify-send -a Grabación "$@"
+}
+
+# Colores de slurp en RRGGBBAA, con la paleta Amatista (igual que captura)
+area() {
+    slurp -d -b 1e153066 -c b98cffff -s b98cff22 -w 2 "$@"
+}
+
+# Imprime el pid de la grabación en curso (y devuelve 0) si sigue viva
+pid_activo() {
+    [ -s "$ESTADO" ] || return 1
+    read -r pid _ < "$ESTADO"
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && echo "$pid"
+}
+
+iniciar() {
+    if pid_activo >/dev/null; then
+        echo "Ya se está grabando" >&2
+        return 1
+    fi
+
+    modo="${1:-pantalla}"
+    mkdir -p "$CARPETA"
+    archivo="$CARPETA/Grabacion_$(date +%Y-%m-%d_%H-%M-%S).mp4"
+    monitor=$(hyprctl -j monitors | jq -r '.[] | select(.focused) | .name')
+
+    if command -v gpu-screen-recorder >/dev/null 2>&1; then
+        case "$modo" in
+            area)
+                region=$(area -f '%wx%h+%x+%y') || return 0   # Esc: cancelar sin avisar
+                set -- gpu-screen-recorder -w region -region "$region" ;;
+            pantalla)
+                set -- gpu-screen-recorder -w "${monitor:-screen}" ;;
+            *) uso; return 1 ;;
+        esac
+        set -- "$@" -f "$FPS" -k h264 -c mp4 -q very_high -o "$archivo"
+        [ "$AUDIO" = no ] || set -- "$@" -a "$AUDIO"
+    elif command -v wf-recorder >/dev/null 2>&1; then
+        case "$modo" in
+            area)
+                region=$(area) || return 0
+                set -- wf-recorder -g "$region" ;;
+            pantalla)
+                set -- wf-recorder ${monitor:+-o "$monitor"} ;;
+            *) uso; return 1 ;;
+        esac
+        set -- "$@" -r "$FPS" -f "$archivo"
+    else
+        avisar "No se puede grabar" "Instala gpu-screen-recorder (o wf-recorder)"
+        return 1
+    fi
+
+    # Sesión en segundo plano: lanza el grabador, publica el estado y,
+    # cuando el grabador termina (por detener o por error), lo limpia y avisa.
+    (
+        "$@" > "$REGISTRO" 2>&1 &
+        pid=$!
+        echo "$pid $(date +%s) $archivo" > "$ESTADO"
+        wait "$pid"
+        : > "$ESTADO"
+        if [ -s "$archivo" ]; then
+            avisar "Grabación guardada" "$archivo"
+        else
+            rm -f "$archivo"
+            avisar -u critical "La grabación falló" "Detalles en $REGISTRO"
+        fi
+    ) > /dev/null 2>&1 &
+}
+
+detener() {
+    pid=$(pid_activo) || { echo "No se está grabando" >&2; return 1; }
+    # SIGINT: el grabador cierra el archivo correctamente
+    kill -INT "$pid"
+}
+
+estado() {
+    if pid_activo >/dev/null; then
+        read -r _ inicio archivo < "$ESTADO"
+        echo "grabando $(( $(date +%s) - inicio )) $archivo"
+    else
+        # Estado huérfano (el grabador murió sin limpiar): se vacía
+        [ -s "$ESTADO" ] && : > "$ESTADO"
+        echo "detenido"
+        return 1
+    fi
+}
+
+uso() {
+    echo "Uso: grabar iniciar [pantalla|area] | detener | alternar [pantalla|area] | estado" >&2
+}
+
+case "$1" in
+    iniciar)  iniciar "$2" ;;
+    detener)  detener ;;
+    alternar) if pid_activo >/dev/null; then detener; else iniciar "$2"; fi ;;
+    estado)   estado ;;
+    *)        uso; exit 1 ;;
+esac

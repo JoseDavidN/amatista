@@ -5,7 +5,8 @@
 //
 //   Izquierda: Arch · workspaces · multimedia
 //   Centro:    reloj
-//   Derecha:   bateria · bluetooth · volumen · red · CPU/RAM · apagar
+//   Derecha:   grabacion (solo al grabar) · luz nocturna · perfil de energia
+//              (solo portatil) · bateria · bluetooth · volumen · red · CPU/RAM · apagar
 // ==========================================================
 import QtQuick
 import Quickshell
@@ -44,6 +45,10 @@ Scope {
             }
 
             implicitHeight: Tema.barraAlto
+
+            // Pantallas angostas (portátiles pequeños): las píldoras muestran
+            // menos texto para que izquierda, reloj y derecha no se monten
+            readonly property bool compacta: width < 1366
             exclusionMode: ExclusionMode.Auto
 
             // ---------- Izquierda ----------
@@ -61,11 +66,12 @@ Scope {
                 }
 
                 Workspaces {}
-                ModuloMultimedia {}
+                ModuloMultimedia { compacta: ventana.compacta }
             }
 
             // ---------- Centro ----------
             ModuloReloj {
+                compacta: ventana.compacta
                 anchors.centerIn: parent
             }
 
@@ -75,10 +81,13 @@ Scope {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Tema.barraEspacio
 
+                ModuloGrabacion {}
+                ModuloLuzNocturna {}
+                ModuloPerfilEnergia {}
                 ModuloBateria {}
                 ModuloBluetooth {}
                 ModuloAudio {}
-                ModuloRed {}
+                ModuloRed { compacta: ventana.compacta }
                 ModuloHardware {}
 
                 Pildora {

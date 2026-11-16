@@ -1,1 +1,0 @@
--- Equipo de escritorio: sin touchpad, sin ajustes de hardware.

@@ -3,7 +3,7 @@
 // - Carrusel de una fila en la parte inferior de la pantalla
 // - Pestana "Escritorio": aplica el fondo al instante (hyprpaper)
 // - Pestana "Bloqueo": elige el fondo de la pantalla de bloqueo
-// - Las imagenes se leen de ~/.local/share/fondos
+// - Las imagenes se leen de ~/Imágenes/wallpaper (script ~/.local/bin/fondos)
 //
 // Teclas: flechas para moverse, Enter aplicar, Tab cambiar de
 // pestana, Inicio/Fin para ir al extremo, Escape cerrar.
@@ -11,11 +11,11 @@
 //   qs -c escritorio ipc call fondos alternar
 // ==========================================================
 import QtQuick
-import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
+import Quickshell.Widgets
 import qs.Comun
 import qs.paneles
 
@@ -160,10 +160,11 @@ Scope {
         Rectangle {
             id: tarjeta
 
-            anchors.left: parent.left
-            anchors.right: parent.right
+            // Centrada, sin ocupar todo el ancho de la pantalla
+            anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
-            anchors.margins: 16
+            anchors.bottomMargin: 24
+            width: Math.min(parent.width - 2 * 120, 1400)
             height: contenido.implicitHeight + 32
             radius: 20
             color: Tema.fondoTarjeta
@@ -279,7 +280,7 @@ Scope {
                             icono: "󰝰"
                             texto: "Abrir carpeta"
                             onClic: {
-                                Quickshell.execDetached(["xdg-open", selector.carpeta]);
+                                Quickshell.execDetached(["nautilus", "--new-window", selector.carpeta]);
                                 selector.cerrar();
                             }
                         }
@@ -297,22 +298,57 @@ Scope {
                     spacing: 16
                     clip: true
                     focus: true
-                    leftMargin: 8
-                    rightMargin: 8
+                    leftMargin: 14
+                    rightMargin: 14
                     boundsBehavior: Flickable.StopAtBounds
                     highlightMoveDuration: 200
                     model: selector.imagenes
 
-                    onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
+                    // true mientras la seleccion cambia por pasar el raton:
+                    // asi el carrusel no se mueve bajo el cursor
+                    property bool porRaton: false
 
-                    // Rueda vertical del raton = desplazamiento horizontal
+                    onCurrentIndexChanged: if (!porRaton) positionViewAtIndex(currentIndex, ListView.Contain)
+
+                    function seleccionarConRaton(i) {
+                        porRaton = true;
+                        currentIndex = i;
+                        porRaton = false;
+                    }
+
+                    // ----- Rueda del raton: desplaza el carrusel una imagen por paso -----
+                    property real destinoX: contentX
+                    property real acumulado: 0
+
+                    function desplazar(event) {
+                        // Rueda vertical u horizontal (touchpad); 120 = un paso de rueda
+                        const delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x;
+                        acumulado += delta;
+                        const pasos = Math.trunc(acumulado / 120);
+                        if (pasos === 0) return;
+                        acumulado -= pasos * 120;
+
+                        const minimo = -leftMargin;
+                        const maximo = Math.max(minimo, contentWidth + rightMargin - width);
+                        const base = animDesplazar.running ? destinoX : contentX;
+                        destinoX = Math.max(minimo, Math.min(maximo,
+                                   base - pasos * (selector.anchoMiniatura + spacing)));
+                        animDesplazar.to = destinoX;
+                        animDesplazar.restart();
+                    }
+
+                    NumberAnimation {
+                        id: animDesplazar
+                        target: lista
+                        property: "contentX"
+                        duration: 220
+                        easing.type: Easing.OutCubic
+                    }
+
+                    // Rueda en los espacios entre imagenes
                     WheelHandler {
                         target: null
-                        onWheel: event => {
-                            const delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x;
-                            const maximo = Math.max(0, lista.contentWidth - lista.width + lista.leftMargin + lista.rightMargin);
-                            lista.contentX = Math.max(-lista.leftMargin, Math.min(maximo - lista.leftMargin, lista.contentX - delta));
-                        }
+                        onWheel: event => lista.desplazar(event)
                     }
 
                     Keys.onPressed: event => {
@@ -346,7 +382,7 @@ Scope {
                         readonly property string rutaImagen: selector.ruta(modelData)
                         readonly property bool enUso: rutaImagen === selector.actual
                         readonly property bool elegido: index === lista.currentIndex
-                        readonly property bool resaltado: elegido || zona.containsMouse
+                        readonly property bool resaltado: elegido
 
                         width: selector.anchoMiniatura
                         height: lista.height
@@ -354,14 +390,15 @@ Scope {
                         Item {
                             id: marco
 
+                            // Resaltada: sube un poco (sin agrandarse, para no
+                            // salirse por los lados en la primera y la última)
                             anchors.top: parent.top
-                            anchors.topMargin: 8
+                            anchors.topMargin: elemento.resaltado ? 2 : 8
                             anchors.horizontalCenter: parent.horizontalCenter
                             width: selector.anchoMiniatura
                             height: selector.altoMiniatura
-                            scale: elemento.resaltado ? 1.04 : 1
 
-                            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                            Behavior on anchors.topMargin { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
                             // Mientras carga
                             Rectangle {
@@ -379,31 +416,21 @@ Scope {
                                 }
                             }
 
-                            // Miniatura con esquinas redondeadas
-                            Image {
-                                id: miniatura
-                                anchors.fill: parent
-                                source: "file://" + elemento.rutaImagen
-                                sourceSize.width: 512
-                                fillMode: Image.PreserveAspectCrop
-                                asynchronous: true
-                                visible: false
-                            }
-
-                            Rectangle {
-                                id: mascara
+                            // Miniatura recortada con esquinas redondeadas
+                            ClippingRectangle {
                                 anchors.fill: parent
                                 radius: 12
-                                visible: false
-                                layer.enabled: true
-                            }
-
-                            MultiEffect {
-                                anchors.fill: parent
-                                source: miniatura
-                                maskEnabled: true
-                                maskSource: mascara
+                                color: "transparent"
                                 visible: miniatura.status === Image.Ready
+
+                                Image {
+                                    id: miniatura
+                                    anchors.fill: parent
+                                    source: "file://" + elemento.rutaImagen
+                                    sourceSize.width: 512
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                }
                             }
 
                             // Borde: en uso (grueso, acento) o elegido con el teclado
@@ -442,6 +469,14 @@ Scope {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
+
+                                // Pasar el raton por encima = seleccionarla
+                                onContainsMouseChanged: if (containsMouse) lista.seleccionarConRaton(elemento.index)
+
+                                // Rueda sobre la imagen: desplazar el carrusel
+                                onWheel: wheel => lista.desplazar(wheel)
+
+                                // Clic = ponerla de fondo
                                 onClicked: {
                                     lista.currentIndex = elemento.index;
                                     selector.aplicar(elemento.modelData);
@@ -484,8 +519,8 @@ Scope {
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
                     text: selector.pestana === "escritorio"
-                          ? "←→ moverse   ·   Enter aplicar al escritorio   ·   Tab pestaña Bloqueo   ·   Esc cerrar"
-                          : "←→ moverse   ·   Enter usar al bloquear   ·   Tab pestaña Escritorio   ·   Esc cerrar"
+                          ? "←→ o rueda moverse   ·   Enter o clic aplicar al escritorio   ·   Tab pestaña Bloqueo   ·   Esc cerrar"
+                          : "←→ o rueda moverse   ·   Enter o clic usar al bloquear   ·   Tab pestaña Escritorio   ·   Esc cerrar"
                     color: Tema.tenue
                     font.family: Tema.fuenteBarra
                     font.pixelSize: 11

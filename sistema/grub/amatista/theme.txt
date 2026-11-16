@@ -1,0 +1,118 @@
+# Tema de GRUB "Amatista"
+#
+# Pensado para 1920x1080 (GRUB_GFXMODE=1920x1080,auto). Menú centrado sobre un
+# panel translúcido, entrada seleccionada con fondo redondeado y una barra que
+# marca el tiempo que queda para el arranque automático.
+#
+# Las imágenes y las fuentes .pf2 se regeneran con
+#   herramientas/construir-grub.py
+# Los nombres de fuente son los internos de cada .pf2 ("Familia Estilo Tamaño");
+# grub-mkconfig carga automáticamente todos los .pf2 de esta carpeta.
+
+# --- Ajustes generales ---------------------------------------------------------
+title-text: ""
+desktop-image: "fondo.png"
+desktop-color: "#1e1530"
+terminal-font: "JetBrainsMono NF Regular 18"
+terminal-box: "menu_*.png"
+terminal-left: "10%"
+terminal-top: "10%"
+terminal-width: "80%"
+terminal-height: "80%"
+terminal-border: "0"
+
+# --- Título --------------------------------------------------------------------
++ label {
+    top = "20%-28"
+    left = 0
+    width = 100%
+    height = 56
+    align = "center"
+    text = "Amatista"
+    font = "Noto Sans Bold 40"
+    color = "#f3eaff"
+}
+
++ label {
+    top = "20%+44"
+    left = 0
+    width = 100%
+    height = 24
+    align = "center"
+    text = "Elige un sistema para arrancar"
+    font = "Noto Sans Regular 16"
+    color = "#a08cc0"
+}
+
+# --- Menú ----------------------------------------------------------------------
+# El panel (menu_*.png) ocupa todo el componente; su borde de 20 px hace de
+# margen interior.
++ boot_menu {
+    left = 50%-380
+    top = 32%
+    width = 760
+    height = 320
+    menu_pixmap_style = "menu_*.png"
+
+    item_font = "Noto Sans Regular 20"
+    item_color = "#d4c2f0"
+    selected_item_font = "Noto Sans Bold 20"
+    selected_item_color = "#f3eaff"
+    selected_item_pixmap_style = "seleccion_*.png"
+
+    item_height = 44
+    item_padding = 16
+    item_spacing = 6
+
+    # Sin iconos: el texto empieza directamente tras el margen.
+    icon_width = 0
+    icon_height = 0
+    item_icon_space = 0
+
+    # Barra de desplazamiento (útil con el submenú de snapshots de grub-btrfs).
+    scrollbar = true
+    scrollbar_width = 6
+    scrollbar_frame = "desliz_marco_*.png"
+    scrollbar_thumb = "desliz_pulgar_*.png"
+}
+
+# --- Temporizador --------------------------------------------------------------
+# El borde del panel del menú (20 px) se dibuja por fuera de su área, así que
+# el menú termina en 32%+340. Barra a 16 px del panel y texto a 16 px de la
+# barra. Los rótulos llevan "height" explícito: sin él GRUB centra el texto
+# sobre "top" y la mitad superior quedaba tapada por la barra.
++ progress_bar {
+    id = "__timeout__"
+    left = 50%-200
+    top = 32%+356
+    width = 400
+    height = 6
+    show_text = false
+    bar_style = "barra_*.png"
+    highlight_style = "barra_luz_*.png"
+}
+
++ label {
+    id = "__timeout__"
+    top = 32%+378
+    left = 0
+    width = 100%
+    height = 24
+    align = "center"
+    text = "Arranque automático en %d s"
+    font = "Noto Sans Regular 16"
+    color = "#a08cc0"
+}
+
+# --- Ayuda ---------------------------------------------------------------------
+# En JetBrainsMono porque Noto Sans no trae las flechas.
++ label {
+    top = 100%-68
+    left = 0
+    width = 100%
+    height = 24
+    align = "center"
+    text = "↑↓ elegir   ⏎ arrancar   e editar   c consola"
+    font = "JetBrainsMono NF Regular 16"
+    color = "#a08cc0"
+}

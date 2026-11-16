@@ -38,3 +38,21 @@ hl.window_rule({
     match = { class = ".*blueman.*" },
     float = true,
 })
+
+-- No bloquear ni apagar la pantalla mientras haya algo en pantalla completa
+-- (películas, videos, juegos), aunque la aplicación no lo pida por sí misma
+hl.window_rule({
+    name         = "idle-inhibit-fullscreen",
+    match        = { class = ".*" },
+    idle_inhibit = "fullscreen",
+})
+
+-- Editor de capturas (satty, botón "Editar"): flotante y grande, para que la
+-- captura se vea completa aunque el espacio tenga otras ventanas en mosaico
+hl.window_rule({
+    name   = "satty-editor",
+    match  = { class = "^com\\.gabm\\.satty$" },
+    float  = true,
+    size   = "monitor_w*0.9 monitor_h*0.88",
+    center = true,
+})

@@ -15,6 +15,7 @@ PanelWindow {
 
     property bool abierto: false
     property int ancho: 560
+    property real posicionY: 0.22 // altura de la tarjeta (fraccion de la pantalla)
     default property alias contenido: cuerpo.data
 
     signal abrio()
@@ -93,8 +94,9 @@ PanelWindow {
         id: tarjeta
 
         anchors.horizontalCenter: parent.horizontalCenter
-        y: Math.round(parent.height * 0.22)
-        width: sup.ancho
+        y: Math.round(parent.height * sup.posicionY)
+        // Nunca más ancha que la pantalla (24 px de margen a cada lado)
+        width: Math.min(sup.ancho, parent.width - 48)
         height: cuerpo.implicitHeight + 36
         radius: 18
         color: Tema.fondoTarjeta

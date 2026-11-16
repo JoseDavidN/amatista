@@ -48,7 +48,7 @@ Singleton {
     readonly property color velo: Qt.rgba(18 / 255, 10 / 255, 30 / 255, 0.40)
 
     // ---------- Fondo de pantalla (hyprpaper y pantalla de bloqueo) ----------
-    readonly property string fondoPantalla: Quickshell.env("HOME") + "/.local/share/fondos/amatista.png"
+    readonly property string fondoPantalla: Quickshell.env("HOME") + "/Imágenes/wallpaper/amatista.png"
 
     // Mismo color con otra transparencia: Tema.conAlfa(Tema.error, 0.3)
     function conAlfa(c, a) {
@@ -68,7 +68,7 @@ Singleton {
 
     readonly property int barraAlto:         52
     readonly property int barraMargenArriba: 15
-    readonly property int barraMargenLados:  10
+    readonly property int barraMargenLados:  40
     readonly property int barraEspacio:      8
     readonly property int altoPildora:       40
     readonly property int radioPildora:      18

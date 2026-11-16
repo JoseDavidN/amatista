@@ -13,6 +13,8 @@ Pildora {
     id: mod
 
     readonly property int maxCaracteres: 32
+    // En pantallas angostas solo el icono; la canción va en el tooltip
+    property bool compacta: false
 
     readonly property var reproductores: Mpris.players.values
     // Fuente elegida a mano en el panel (null = automatico)
@@ -34,8 +36,8 @@ Pildora {
 
     icono: "󰎆"
     colorIcono: actual && actual.isPlaying ? Tema.rosa : Tema.tenue
-    texto: cancion.length > maxCaracteres ? cancion.slice(0, maxCaracteres - 1).trim() + "…" : cancion
-    tooltip: actual ? [actual.trackArtist, actual.identity].filter(t => t).join(" · ") : ""
+    texto: compacta ? "" : cancion.length > maxCaracteres ? cancion.slice(0, maxCaracteres - 1).trim() + "…" : cancion
+    tooltip: actual ? [compacta ? cancion : "", actual.trackArtist, actual.identity].filter(t => t).join(" · ") : ""
 
     PanelMultimedia {
         id: panel

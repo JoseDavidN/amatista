@@ -1,0 +1,16 @@
+#!/bin/sh
+# Bloquea la sesión.
+# Usa la pantalla de bloqueo del escritorio (Quickshell); si el escritorio
+# no está corriendo (se cerró o falló), usa la pantalla de respaldo.
+
+if qs -c escritorio ipc call bloqueo bloquear >/dev/null 2>&1; then
+    exit 0
+fi
+
+# Respaldo: no abrir dos veces
+RESPALDO="$HOME/.config/quickshell/lock"
+if qs -p "$RESPALDO" ipc show >/dev/null 2>&1; then
+    exit 0
+fi
+
+exec qs -p "$RESPALDO"

@@ -1,0 +1,12 @@
+#%PAM-1.0
+# PAM de la sesión del greeter (usuario "greeter"), se instala en
+# /etc/pam.d/greetd-greeter. greetd usa este servicio para default_session;
+# sin este archivo usaría /etc/pam.d/greetd y arrancaría gnome-keyring
+# también para el usuario "greeter", que no lo necesita.
+# Es igual al /etc/pam.d/greetd original de Arch, sin gnome-keyring.
+
+auth       required     pam_securetty.so
+auth       requisite    pam_nologin.so
+auth       include      system-local-login
+account    include      system-local-login
+session    include      system-local-login

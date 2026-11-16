@@ -17,10 +17,13 @@ Pildora {
     colorIcono: Tema.rosa
     texto: Qt.formatDateTime(reloj.date, "HH:mm")
 
-    icono2: ""
+    icono2: compacta ? "" : ""
     colorIcono2: Tema.acento
     // "%a %d %b" -> "mié 11 nov" (sin los puntos que agrega Qt en español)
-    texto2: reloj.date.toLocaleString(Qt.locale("es_CO"), "ddd dd MMM").replace(/\./g, "")
+    // En pantallas angostas solo la hora (la fecha queda en el tooltip)
+    property bool compacta: false
+    tooltip: compacta ? reloj.date.toLocaleString(Qt.locale("es_CO"), "dddd d 'de' MMMM") : ""
+    texto2: compacta ? "" : reloj.date.toLocaleString(Qt.locale("es_CO"), "ddd dd MMM").replace(/\./g, "")
 
     relleno: 14
 }

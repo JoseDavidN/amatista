@@ -1,0 +1,12 @@
+# Tema de arranque "Amatista" para Plymouth.
+# Se instala en /usr/share/plymouth/themes/amatista/
+[Plymouth Theme]
+Name=Amatista
+Description=Gema lila sobre fondo morado oscuro, puntos de carga y diálogo de contraseña a juego
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/amatista
+ScriptFile=/usr/share/plymouth/themes/amatista/amatista.script
+# El hook de mkinitcpio lee esta línea para copiar la fuente al initramfs.
+Font=Noto Sans 12

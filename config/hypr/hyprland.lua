@@ -126,9 +126,7 @@ hl.config({
 ---- INPUT ----
 ---------------
 
-require("config.input")
-
-require("config.hardware")
+require("config.input")  -- teclado, mouse y touchpad (igual en todos los equipos)
 
 -- Example per-device config
 -- See https://wiki.hypr.land/Configuring/Advanced-and-Cool/Devices/ for more

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Se aplica si el equipo tiene el códec de audio VIA VT1708S de la placa
+# ASUS P8H77-V (Vendor Id 0x11060397, Subsystem Id 0x1043836c).
+grep -qs 'Vendor Id: 0x11060397' /proc/asound/card*/codec#* &&
+grep -qs 'Subsystem Id: 0x1043836c' /proc/asound/card*/codec#*

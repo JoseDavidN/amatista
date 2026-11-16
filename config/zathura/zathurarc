@@ -1,0 +1,40 @@
+# zathura - visor de PDF con la paleta Amatista
+# Teclas: j/k desplazar · J/K página · +/- zoom · a/s ajustar alto/ancho
+#         / buscar · Ctrl+R colores del tema sobre el documento · q salir
+
+set font                 "Noto Sans 11"
+set selection-clipboard  clipboard
+set guioptions           "s"
+set adjust-open          "width"
+set window-title-basename true
+
+set default-bg           "#1e1530"
+set default-fg           "#f3eaff"
+set statusbar-bg         "#2a1f3d"
+set statusbar-fg         "#d4c2f0"
+set inputbar-bg          "#2a1f3d"
+set inputbar-fg          "#f3eaff"
+set notification-bg      "#2a1f3d"
+set notification-fg      "#f3eaff"
+set notification-error-bg   "#4d2a48"
+set notification-error-fg   "#ff7a9a"
+set notification-warning-bg "#2a1f3d"
+set notification-warning-fg "#ffcf85"
+set completion-bg        "#2a1f3d"
+set completion-fg        "#d4c2f0"
+set completion-group-bg  "#1e1530"
+set completion-group-fg  "#a08cc0"
+set completion-highlight-bg "#b98cff"
+set completion-highlight-fg "#1e1530"
+set index-bg             "#1e1530"
+set index-fg             "#d4c2f0"
+set index-active-bg      "#40305c"
+set index-active-fg      "#f3eaff"
+set highlight-color      "rgba(185,140,255,0.35)"
+set highlight-active-color "rgba(255,154,213,0.45)"
+
+# Ctrl+R: documento con los colores del tema (desactivado al abrir)
+set recolor              false
+set recolor-keephue      true
+set recolor-lightcolor   "#1e1530"
+set recolor-darkcolor    "#f3eaff"

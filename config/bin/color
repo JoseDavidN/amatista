@@ -1,0 +1,15 @@
+#!/bin/sh
+# Selector de color de la pantalla (hyprpicker). Copia el color en hexadecimal
+# al portapapeles y avisa con una muestra del color.
+
+color=$(hyprpicker --format=hex --lowercase-hex --quiet 2>/dev/null) || exit 0
+[ -n "$color" ] || exit 0          # Esc: cancelar sin avisar
+
+printf '%s' "$color" | wl-copy
+
+# Muestra del color para la notificación
+muestra="${XDG_RUNTIME_DIR:-/tmp}/color-muestra.png"
+printf '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect x="2" y="2" width="60" height="60" rx="14" fill="%s" stroke="#f3eaff" stroke-width="3"/></svg>' "$color" \
+    | rsvg-convert -o "$muestra" 2>/dev/null
+
+notify-send -a Color -i "$muestra" "Color $color" "Copiado al portapapeles"

@@ -1,0 +1,20 @@
+#%PAM-1.0
+# PAM de greetd para el inicio de sesión del usuario (se instala en /etc/pam.d/greetd).
+# Es el archivo original de Arch más gnome-keyring: el llavero "login" se
+# desbloquea con la misma contraseña que escribes en el greeter de Quickshell.
+# Si el llavero "login" aún no existe, se crea con esa contraseña.
+
+auth       required     pam_securetty.so
+auth       requisite    pam_nologin.so
+auth       include      system-local-login
+# Guarda la contraseña ya comprobada para desbloquear el llavero al abrir la sesión
+# (va después del include: solo se usa si la contraseña fue correcta)
+auth       optional     pam_gnome_keyring.so
+
+account    include      system-local-login
+
+session    include      system-local-login
+# Va después del include (pam_systemd ya arrancó el systemd de usuario):
+# se conecta a gnome-keyring-daemon.socket, o arranca el demonio si no existe,
+# y desbloquea el llavero "login"
+session    optional     pam_gnome_keyring.so auto_start

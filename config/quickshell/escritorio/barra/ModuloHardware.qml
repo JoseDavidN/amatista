@@ -1,7 +1,8 @@
 // ==========================================================
 // Hardware en una sola capsula, como tu "group/hardware" de Waybar:
-// se ve la CPU y, al pasar el raton, la capsula se alarga hacia la
+// se ve la CPU y, al hacer clic, la capsula se alarga hacia la
 // izquierda mostrando Disco / RAM / CPU dentro del mismo boton.
+// Otro clic la vuelve a recoger.
 // Se actualizan cada 10 s.
 // ==========================================================
 import QtQuick
@@ -21,13 +22,16 @@ Rectangle {
     property real totalAnterior: 0
     property real ocioAnterior: 0
 
-    readonly property bool abierto: hover.hovered
+    // Se despliega con un clic (no al pasar el raton)
+    property bool abierto: false
     readonly property int relleno: 10
 
     implicitWidth: extra.width + segCpu.implicitWidth + relleno * 2
     implicitHeight: Tema.altoPildora
     radius: Tema.radioPildora
-    color: Tema.pildora
+    color: hover.hovered ? Tema.pildoraHover : Tema.pildora
+
+    Behavior on color { ColorAnimation { duration: 120 } }
 
     // Bytes -> "123G" (en GiB, igual que df -h)
     function gb(bytes) {
@@ -106,7 +110,15 @@ Rectangle {
         onTriggered: if (!lectura.running) lectura.running = true
     }
 
-    HoverHandler { id: hover }
+    HoverHandler {
+        id: hover
+        cursorShape: Qt.PointingHandCursor
+    }
+
+    TapHandler {
+        acceptedButtons: Qt.LeftButton
+        onTapped: mod.abierto = !mod.abierto
+    }
 
     // Icono + texto, con el mismo estilo que Pildora
     component Segmento: Row {

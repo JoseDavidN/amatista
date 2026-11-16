@@ -1,0 +1,15 @@
+# imv - visor de imágenes con la paleta Amatista
+# Teclas: ←/→ anterior/siguiente · +/- zoom · r restablecer · f pantalla completa
+#         d mostrar/ocultar datos · q salir
+[options]
+background = 1e1530
+overlay = false
+overlay_font = JetBrainsMono Nerd Font:11
+overlay_text_color = f3eaff
+overlay_background_color = 2a1f3d
+overlay_background_alpha = e6
+title_text = $imv_current_file — imv [$imv_current_index/$imv_file_count]
+overlay_text = $imv_current_file · $imv_width×$imv_height · $imv_scale%  [$imv_current_index/$imv_file_count]
+
+[binds]
+d = overlay
