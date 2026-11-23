@@ -1,2 +1,3 @@
 module qs.sistema
 Inactividad 1.0 Inactividad.qml
+singleton EstadoInactividad 1.0 EstadoInactividad.qml

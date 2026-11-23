@@ -1,0 +1,3 @@
+module qs.clima
+singleton ServicioClima 1.0 ServicioClima.qml
+PanelClima 1.0 PanelClima.qml

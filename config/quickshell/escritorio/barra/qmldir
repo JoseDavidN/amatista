@@ -9,10 +9,25 @@ ModuloRed 1.0 ModuloRed.qml
 ModuloBluetooth 1.0 ModuloBluetooth.qml
 ModuloReloj 1.0 ModuloReloj.qml
 ModuloHardware 1.0 ModuloHardware.qml
+PanelHardware 1.0 PanelHardware.qml
 ModuloMultimedia 1.0 ModuloMultimedia.qml
 ModuloLuzNocturna 1.0 ModuloLuzNocturna.qml
+PanelLuzNocturna 1.0 PanelLuzNocturna.qml
 ModuloGrabacion 1.0 ModuloGrabacion.qml
 ModuloPerfilEnergia 1.0 ModuloPerfilEnergia.qml
 singleton ServicioLuzNocturna 1.0 ServicioLuzNocturna.qml
 singleton ServicioGrabacion 1.0 ServicioGrabacion.qml
 singleton ServicioPerfilEnergia 1.0 ServicioPerfilEnergia.qml
+ModuloBandeja 1.0 ModuloBandeja.qml
+PanelBandeja 1.0 PanelBandeja.qml
+ModuloPrivacidad 1.0 ModuloPrivacidad.qml
+singleton ServicioPrivacidad 1.0 ServicioPrivacidad.qml
+ModuloCafe 1.0 ModuloCafe.qml
+ModuloNotificaciones 1.0 ModuloNotificaciones.qml
+PanelNotificaciones 1.0 PanelNotificaciones.qml
+ModuloActualizaciones 1.0 ModuloActualizaciones.qml
+PanelActualizaciones 1.0 PanelActualizaciones.qml
+singleton ServicioActualizaciones 1.0 ServicioActualizaciones.qml
+ModuloRespaldos 1.0 ModuloRespaldos.qml
+PanelRespaldos 1.0 PanelRespaldos.qml
+singleton ServicioRespaldos 1.0 ServicioRespaldos.qml

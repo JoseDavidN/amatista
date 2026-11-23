@@ -5,7 +5,7 @@
 //
 //   Notificaciones      reemplaza a mako
 //   Barra + paneles     reemplaza a Waybar, networkmanager-dmenu y blueman
-//   Lanzador y apagado  reemplaza a rofi
+//   Lanzador            apps, fondos y sesión (reemplaza a rofi)
 //   Bloqueo             reemplaza a hyprlock
 //   Inactividad         reemplaza a hypridle
 //   OSD y portapapeles
@@ -28,7 +28,6 @@ ShellRoot {
     Notificaciones {}
     Barra {}
     Lanzador {}
-    MenuApagado {}
     Osd {}
     Portapapeles {}
     SelectorFondos {}

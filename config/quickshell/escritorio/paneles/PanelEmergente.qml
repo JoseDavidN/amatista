@@ -173,10 +173,22 @@ PanelWindow {
                 }
             }
 
-            Column {
-                id: cuerpo
+            // Si no cabe en la pantalla, el cuerpo se desplaza
+            Flickable {
+                id: vista
                 width: parent.width
-                spacing: 10
+                height: Math.min(cuerpo.implicitHeight, Math.max(200,
+                        panel.height - panel.posY - Tema.margenPantalla - 32 - 28 - columna.spacing))
+                contentHeight: cuerpo.implicitHeight
+                interactive: contentHeight > height + 1
+                clip: interactive
+                boundsBehavior: Flickable.StopAtBounds
+
+                Column {
+                    id: cuerpo
+                    width: vista.width
+                    spacing: 10
+                }
             }
         }
     }

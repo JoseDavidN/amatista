@@ -24,7 +24,7 @@ hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(programs.fileManager), { description 
 hl.bind(mainMod .. " + N", hl.dsp.exec_cmd(programs.browser),     { description = "Aplicaciones: Navegador" })
 
 -- ---------- Escritorio (paneles de Quickshell) ----------
-hl.bind(mainMod .. " + R",         hl.dsp.exec_cmd(qs .. "lanzador alternar"),     { description = "Escritorio: Lanzador de aplicaciones" })
+hl.bind(mainMod .. " + R",         hl.dsp.exec_cmd(qs .. "lanzador alternar"),     { description = "Escritorio: Lanzador (apps, fondos y sesión)" })
 hl.bind(mainMod .. " + W",         hl.dsp.exec_cmd(qs .. "fondos alternar"),       { description = "Escritorio: Elegir fondo de pantalla" })
 hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_cmd(qs .. "portapapeles alternar"), { description = "Escritorio: Historial del portapapeles" })
 -- Ayuda de atajos (Super + A)

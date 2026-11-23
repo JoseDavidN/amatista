@@ -1,3 +1,4 @@
 module qs.notificaciones
 Notificaciones 1.0 Notificaciones.qml
 Tarjeta 1.0 Tarjeta.qml
+singleton Centro 1.0 Centro.qml

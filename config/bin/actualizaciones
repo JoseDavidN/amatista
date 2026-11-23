@@ -1,0 +1,49 @@
+#!/bin/sh
+# Actualizaciones pendientes, para la barra.
+#
+#   actualizaciones listar    R|paquete|actual|nueva  (Arch)   A|...  (AUR)
+#                             FALTA  si no está pacman-contrib
+#                             ERROR|arch  o  ERROR|aur  si no se pudo consultar
+#   actualizaciones instalar  actualiza todo (abrir dentro de una terminal)
+export LC_ALL=C
+
+campos() { sed -n "s/^\([^ ]*\) \([^ ]*\) -> \([^ ]*\).*/$1|\1|\2|\3/p"; }
+
+case "$1" in
+    listar)
+        # checkupdates usa su propia copia de la base: no deja el sistema a medias
+        if ! command -v checkupdates >/dev/null; then
+            echo FALTA
+        else
+            salida=$(timeout 120 checkupdates --nocolor 2>/dev/null); codigo=$?
+            case $codigo in
+                0) printf '%s\n' "$salida" | campos R ;;
+                2) ;;                       # no hay actualizaciones
+                *) echo "ERROR|arch" ;;
+            esac
+        fi
+        if command -v yay >/dev/null; then
+            # yay devuelve 1 tanto si no hay nada como si falla: el error se ve en stderr
+            errores=$(mktemp) || exit 1
+            timeout 60 yay -Qua --color never 2>"$errores" | grep -v '\[ignored\]' | campos A
+            grep -qiE 'error|timeout|no such host|unreachable|failed' "$errores" && echo "ERROR|aur"
+            rm -f "$errores"
+        fi
+        ;;
+
+    instalar)
+        # En español si el sistema lo está
+        unset LC_ALL
+        if command -v yay >/dev/null; then yay -Syu; else sudo pacman -Syu; fi
+        printf '\nEnter para cerrar '
+        # La barra vuelve a comprobar
+        qs -c escritorio ipc call actualizaciones comprobar >/dev/null 2>&1
+        read -r _
+        ;;
+
+    *)
+        echo "Uso: actualizaciones listar | instalar" >&2
+        exit 1
+        ;;
+esac
+exit 0

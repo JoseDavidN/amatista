@@ -1,0 +1,33 @@
+#!/bin/sh
+# Estado de los respaldos automáticos (respaldo.service y respaldo.timer),
+# para la barra. No necesita root: lee systemd y el registro del sistema.
+#
+#   TEMPORIZADOR|carga|activo|habilitado|última vez|próxima   (horas: epoch o vacío)
+#   SERVICIO|estado|resultado
+#   DISCO|ruta|montado (1/0)|usado|total
+#   R|epoch|mensaje    registro del servicio, de lo más viejo a lo más nuevo
+export LC_ALL=C
+UNIDAD=respaldo
+
+valor() { printf '%s\n' "$1" | sed -n "s/^$2=//p"; }
+epoca() { e=$(valor "$1" "$2"); printf '%s' "${e#@}" | grep -xE '[0-9]+'; }
+
+t=$(systemctl show $UNIDAD.timer --timestamp=unix -p LoadState,ActiveState,UnitFileState,LastTriggerUSec,NextElapseUSecRealtime)
+echo "TEMPORIZADOR|$(valor "$t" LoadState)|$(valor "$t" ActiveState)|$(valor "$t" UnitFileState)|$(epoca "$t" LastTriggerUSec)|$(epoca "$t" NextElapseUSecRealtime)"
+[ "$(valor "$t" LoadState)" = loaded ] || exit 0
+
+s=$(systemctl show $UNIDAD.service -p ActiveState,Result,RequiresMountsFor)
+echo "SERVICIO|$(valor "$s" ActiveState)|$(valor "$s" Result)"
+
+for ruta in $(valor "$s" RequiresMountsFor); do
+    case "$ruta" in /|/tmp|/var/tmp|/var/cache*) continue ;; esac
+    if mountpoint -q "$ruta"; then
+        echo "DISCO|$ruta|1|$(df -B1 --output=used,avail "$ruta" | awk 'NR==2 {print $1 "|" $1 + $2}')"
+    else
+        echo "DISCO|$ruta|0||"
+    fi
+done
+
+journalctl -u $UNIDAD.service -n 400 -o short-unix --no-pager -q 2>/dev/null |
+    sed -nE 's/^([0-9]+)\.[0-9]+ [^ ]+ [^:]+: (Starting .*|Finished .*|Failed to start .*|processed .*|Added to the repository.*|snapshot [0-9a-f]+ saved|(Fatal|Warning|error|unable).*)$/R|\1|\2/p'
+exit 0

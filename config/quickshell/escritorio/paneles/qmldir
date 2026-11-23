@@ -9,6 +9,8 @@ ControlVolumen 1.0 ControlVolumen.qml
 PanelAudio 1.0 PanelAudio.qml
 PanelBluetooth 1.0 PanelBluetooth.qml
 PanelRed 1.0 PanelRed.qml
+DatosRed 1.0 DatosRed.qml
+TraficoRed 1.0 TraficoRed.qml
 PanelMultimedia 1.0 PanelMultimedia.qml
 Visualizador 1.0 Visualizador.qml
 SelectorFuentes 1.0 SelectorFuentes.qml

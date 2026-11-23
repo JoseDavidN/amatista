@@ -1,9 +1,11 @@
 // ==========================================================
-// Panel de red (NetworkManager con nmcli)
-// - Encender / apagar Wi-Fi, buscar redes
-// - Conectar con un clic; si la red pide contrasena se abre un
-//   dialogo en el centro de la pantalla
-// - Desconectar, ver la IP
+// Panel de red: una pestaña por tipo de conexión del equipo
+//   Ethernet  estado, IP, máscara, velocidad, DNS, tráfico...
+//   Wi-Fi     lo mismo, y encender / apagar, buscar y conectar redes
+//             (si la red pide contraseña se abre un diálogo central)
+//   VPN       Tailscale (con sus equipos) y otras: WireGuard, OpenVPN,
+//             ZeroTier, NetBird... Con solo Tailscale la pestaña lleva su nombre
+// Solo aparecen las pestañas de lo que el equipo tiene.
 // ==========================================================
 import QtQuick
 import Quickshell
@@ -14,17 +16,43 @@ import qs.Comun
 PanelEmergente {
     id: panel
 
+    ancho: Math.min(460, (screen ? screen.width : 1920) - 24)
     titulo: "Red"
-    icono: "󰖩"
+    icono: String.fromCodePoint(0xf06f3)
     colorIcono: Tema.ambar
 
     property bool wifiActivo: true
     property string interfazWifi: ""
     property string conectadaA: ""
-    property string interfazCable: ""
-    property string ip: ""
-    property var redes: []
     property bool buscando: false
+
+    // Conexiones del equipo
+    property var cables: []         // interfaces Ethernet
+    property var wifi: null         // interfaz Wi-Fi o null
+    property var vpns: []           // túneles activos (sin Tailscale)
+    property var perfilesVpn: []    // VPN guardadas en NetworkManager
+    property bool hayTailscale: false
+    property var tailscale: null    // estado de Tailscale o null si no responde
+    property var equipos: []        // equipos de la red de Tailscale
+    property bool tailscaleOcupado: false
+    property string errorVpn: ""
+    property var trafico: ({})      // por interfaz: { bajada, subida, rx, tx }
+
+    property bool listo: false
+    property bool elegida: false    // la pestaña se eligió a mano
+    property string pestana: ""
+    property string principal: ""   // pestaña de la salida a internet
+
+    readonly property var pestanas: {
+        const l = [];
+        if (cables.length) l.push({ id: "cable", icono: String.fromCodePoint(0xf0200), texto: "Ethernet" });
+        if (wifi) l.push({ id: "wifi", icono: "󰖩", texto: "Wi-Fi" });
+        if (hayTailscale || vpns.length || perfilesVpn.length)
+            l.push({ id: "vpn", icono: String.fromCodePoint(0xf0582),
+                     texto: hayTailscale && !vpns.length && !perfilesVpn.length ? "Tailscale" : "VPN" });
+        return l;
+    }
+    property var redes: []
 
     property string conectando: ""
     property var redEnCurso: null
@@ -51,64 +79,300 @@ PanelEmergente {
         return (texto || "").trim().split("\n").filter(l => l !== "");
     }
 
+    function json(texto) {
+        try { return JSON.parse(texto); } catch (e) { return null; }
+    }
+
+    // Asigna solo si cambió, para no rehacer listas a cada consulta
+    function poner(propiedad, valor) {
+        if (JSON.stringify(panel[propiedad]) !== JSON.stringify(valor)) panel[propiedad] = valor;
+    }
+
+    // 24 -> 255.255.255.0
+    function mascara(prefijo) {
+        const o = [];
+        for (let i = 0; i < 4; i++) {
+            const bits = Math.max(0, Math.min(8, prefijo - i * 8));
+            o.push(256 - Math.pow(2, 8 - bits));
+        }
+        return o.join(".");
+    }
+
     function procesar(salida) {
-        const partes = salida.split("---");
+        const partes = salida.split("@@@\n");
 
         wifiActivo = (partes[0] || "").trim() === "enabled";
 
+        // Datos del sistema: NOMBRE|fisica|velocidad|duplex
+        const fisico = {};
+        for (const l of lineas(partes[5])) {
+            const c = l.split("|");
+            fisico[c[0]] = { fisica: c[1] === "1", velocidad: parseInt(c[2]) || 0, duplex: c[3] || "" };
+        }
+
+        // Puerta de enlace y DNS de cada dispositivo (bloques de nmcli)
+        const nm = {};
+        let bloque = null;
+        for (const l of lineas(partes[6])) {
+            const c = campos(l), clave = c[0], valor = c.slice(1).join(":");
+            if (clave === "GENERAL.DEVICE") bloque = nm[valor] = { dns: [], puerta: "", controlador: "", dominio: "" };
+            else if (!bloque || valor === "") continue;
+            else if (clave === "GENERAL.DRIVER") bloque.controlador = valor;
+            else if (clave === "IP4.GATEWAY") bloque.puerta = valor;
+            else if (clave.startsWith("IP4.DNS")) bloque.dns.push(valor);
+            else if (clave.startsWith("IP4.DOMAIN")) bloque.dominio = valor;
+        }
+
+        // Direcciones: ip -j -d addr
+        const direcciones = {};
+        for (const d of json(partes[4]) || []) {
+            const v4 = (d.addr_info || []).find(a => a.family === "inet");
+            const v6s = (d.addr_info || []).filter(a => a.family === "inet6");
+            const v6 = v6s.find(a => a.scope === "global") || v6s[0];
+            direcciones[d.ifname] = {
+                ip: v4 ? v4.local : "", prefijo: v4 ? v4.prefixlen : 0,
+                asignacion: v4 ? (v4.dynamic ? "DHCP" : "Manual") : "",
+                difusion: v4 && v4.broadcast ? v4.broadcast : "",
+                v6: v6 ? v6.local : "", mac: d.address || "", mtu: d.mtu || 0,
+                subida: (d.flags || []).indexOf("UP") >= 0,
+                tipo: d.linkinfo ? d.linkinfo.info_kind : ""
+            };
+        }
+
         // Dispositivos: DEVICE:TYPE:STATE:CONNECTION
-        let wifiDev = "", wifiCon = "", cableDev = "";
+        const cablesN = [], vpnsN = [];
+        let wifiN = null;
+        const reunir = (nombre, estado, conexion) => Object.assign(
+            { nombre: nombre, conectada: estado.startsWith("connected"), estado: estado, conexion: conexion },
+            direcciones[nombre] || {}, nm[nombre] || { dns: [], puerta: "" }, fisico[nombre] || {});
+        const vistos = {};
         for (const l of lineas(partes[1])) {
             const c = campos(l);
             if (c.length < 4) continue;
-            if (c[1] === "wifi") {
-                wifiDev = c[0];
-                if (c[2] === "connected") wifiCon = c[3];
-            }
-            if (c[1] === "ethernet" && c[2] === "connected") cableDev = c[0];
+            vistos[c[0]] = c;
+            if (c[1] === "wifi" && !wifiN) wifiN = reunir(c[0], c[2], c[3]);
+            if (c[1] === "ethernet" && fisico[c[0]] && fisico[c[0]].fisica) cablesN.push(reunir(c[0], c[2], c[3]));
+        }
+        // Túneles: por su tipo o por el nombre que les da cada programa
+        for (const n in direcciones) {
+            if (n === "lo" || n.startsWith("tailscale") || /^(vnet|virbr|docker|veth|br-)/.test(n)) continue;
+            const d = direcciones[n];
+            if (d.tipo !== "wireguard" && !/^(tun|tap|wg|ppp|zt|wt\d|nordlynx|proton|CloudflareWARP)/.test(n)) continue;
+            const v = reunir(n, d.subida ? "connected" : "disconnected", vistos[n] ? vistos[n][3] : "");
+            v.clase = /^zt/.test(n) ? "ZeroTier" : /^wt\d/.test(n) ? "NetBird" : n === "CloudflareWARP" ? "Cloudflare WARP"
+                    : n === "nordlynx" ? "NordVPN" : /^proton/.test(n) ? "Proton VPN" : d.tipo === "wireguard" ? "WireGuard"
+                    : /^ppp/.test(n) ? "PPP" : "Túnel";
+            vpnsN.push(v);
         }
 
-        // Conexiones guardadas: NAME:TYPE
-        const guardadas = {};
+        // Conexiones guardadas: TYPE:UUID:ACTIVE:NAME
+        const guardadas = {}, perfiles = [];
         for (const l of lineas(partes[3])) {
             const c = campos(l);
-            if (c.length >= 2 && c[1] === "802-11-wireless") guardadas[c[0]] = true;
+            if (c.length < 4) continue;
+            if (c[0] === "802-11-wireless") guardadas[c[3]] = true;
+            if (c[0] === "vpn" || c[0] === "wireguard")
+                perfiles.push({ nombre: c[3], uuid: c[1], activa: c[2] === "yes", tipo: c[0] === "vpn" ? "VPN" : "WireGuard" });
         }
 
-        // Redes visibles: IN-USE:SIGNAL:SECURITY:SSID (una por nombre, la de mejor senal)
+        // Redes visibles: IN-USE:SIGNAL:CHAN:FREQ:RATE:SECURITY:BSSID:SSID
+        // (una por nombre, la de mejor senal)
         const porNombre = {};
-        let enUso = "";
+        let enUso = null;
         for (const l of lineas(partes[2])) {
             const c = campos(l);
-            if (c.length < 4 || c[3] === "") continue;
+            if (c.length < 8 || c[7] === "") continue;
             const red = {
-                ssid: c[3],
+                ssid: c[7],
                 senal: parseInt(c[1]) || 0,
-                segura: c[2] !== "" && c[2] !== "--",
-                seguridad: c[2] === "--" ? "" : c[2],
-                conocida: guardadas[c[3]] === true,
+                canal: c[2], frecuencia: c[3], ritmo: c[4], bssid: c[6],
+                segura: c[5] !== "" && c[5] !== "--",
+                seguridad: c[5] === "--" ? "" : c[5],
+                conocida: guardadas[c[7]] === true,
                 enUso: c[0] === "*"
             };
-            if (red.enUso) enUso = red.ssid;
+            if (red.enUso) enUso = red;
             const previa = porNombre[red.ssid];
-            if (!previa || red.senal > previa.senal || red.enUso) porNombre[red.ssid] = red;
+            if (!previa || red.enUso || (red.senal > previa.senal && !previa.enUso)) porNombre[red.ssid] = red;
         }
-        const lista = Object.keys(porNombre).map(k => porNombre[k]).filter(r => r.ssid !== enUso);
+        const lista = Object.keys(porNombre).map(k => porNombre[k]).filter(r => !enUso || r.ssid !== enUso.ssid);
         lista.sort((a, b) => (b.conocida - a.conocida) || (b.senal - a.senal));
 
-        // IP de la interfaz activa
-        const activa = cableDev || (wifiCon ? wifiDev : "");
-        let direccion = "";
-        for (const l of lineas(partes[4])) {
-            const c = l.trim().split(/\s+/);
-            if (c.length >= 4 && c[1] === activa && c[2] === "inet") direccion = c[3].split("/")[0];
-        }
+        if (wifiN) wifiN.red = enUso;
+        interfazWifi = wifiN ? wifiN.nombre : "";
+        conectadaA = enUso ? enUso.ssid : wifiN && wifiN.conectada ? wifiN.conexion : "";
+        poner("redes", lista.slice(0, 8));
+        poner("cables", cablesN);
+        poner("wifi", wifiN);
+        poner("vpns", vpnsN);
+        poner("perfilesVpn", perfiles);
 
-        interfazWifi = wifiDev;
-        conectadaA = enUso || wifiCon;
-        interfazCable = cableDev;
-        ip = direccion;
-        redes = lista.slice(0, 10);
+        // Tailscale: "no" si no está instalado; si no, su JSON (o vacío si no responde)
+        const ts = (partes[7] || "").trim();
+        hayTailscale = ts !== "no";
+        procesarTailscale(hayTailscale ? json(ts) : null, direcciones);
+
+        // Pestaña inicial: la de la salida a internet
+        const ruta = (json(partes[8]) || []).slice().sort((a, b) => (a.metric || 0) - (b.metric || 0))[0];
+        const dev = ruta ? ruta.dev : "";
+        principal = wifiN && wifiN.nombre === dev ? "wifi" : cablesN.some(x => x.nombre === dev) ? "cable"
+                  : dev !== "" ? "vpn" : "";
+        listo = true;
+        const ids = pestanas.map(x => x.id);
+        if (ids.indexOf(pestana) < 0 || !elegida)
+            pestana = ids.indexOf(principal) >= 0 ? principal : ids[0] || "";
+    }
+
+    function procesarTailscale(t, direcciones) {
+        if (!t) {
+            tailscale = null;
+            poner("equipos", []);
+            return;
+        }
+        const yo = t.Self || {}, ips = yo.TailscaleIPs || t.TailscaleIPs || [];
+        const d = direcciones["tailscale0"] || {};
+        const usuario = t.User && t.User[yo.UserID] ? t.User[yo.UserID].LoginName : "";
+        const lista = Object.keys(t.Peer || {}).map(k => t.Peer[k]);
+        const salida = lista.find(p => p.ExitNode);
+        const corto = p => String(p.DNSName || "").split(".")[0] || p.HostName || "";
+        poner("tailscale", {
+            estado: t.BackendState || "",
+            activo: t.BackendState === "Running",
+            nombre: corto(yo),
+            dns: String(yo.DNSName || "").replace(/\.$/, ""),
+            ip: ips.find(i => i.indexOf(":") < 0) || "",
+            v6: ips.find(i => i.indexOf(":") >= 0) || "",
+            prefijo: d.prefijo || 0,
+            mtu: d.mtu || 0,
+            red: t.CurrentTailnet ? t.CurrentTailnet.Name : "",
+            usuario: usuario,
+            rele: yo.Relay || "",
+            salida: salida ? corto(salida) : "",
+            version: String(t.Version || "").split("-")[0],
+            enLinea: lista.filter(p => p.Online).length,
+            total: lista.length
+        });
+        poner("equipos", lista.map(p => ({
+            nombre: corto(p),
+            ip: (p.TailscaleIPs || []).find(i => i.indexOf(":") < 0) || "",
+            so: p.OS || "",
+            enLinea: p.Online === true,
+            via: !p.Online || !p.Active ? "" : p.CurAddr ? "directo" : p.Relay ? "relé " + p.Relay : "",
+            salida: p.ExitNode === true
+        })).sort((a, b) => (b.enLinea - a.enLinea) || a.nombre.localeCompare(b.nombre)));
+    }
+
+    readonly property string textoTailscale: {
+        if (!tailscale) return "El servicio no responde";
+        switch (tailscale.estado) {
+            case "Running":          return "Conectado";
+            case "Stopped":          return "Desconectado";
+            case "Starting":         return "Conectando…";
+            case "NeedsLogin":       return "Falta iniciar sesión: sudo tailscale up";
+            case "NeedsMachineAuth": return "Falta aprobar este equipo";
+            default:                 return tailscale.estado;
+        }
+    }
+
+    function alternarTailscale() {
+        if (accionTailscale.running || !tailscale) return;
+        errorVpn = "";
+        accionTailscale.command = ["timeout", "20", "tailscale", tailscale.activo ? "down" : "up"];
+        accionTailscale.running = true;
+    }
+
+    function alternarPerfil(p) {
+        if (accionVpn.running) return;
+        errorVpn = "";
+        accionVpn.command = ["nmcli", "connection", p.activa ? "down" : "up", "uuid", p.uuid];
+        accionVpn.running = true;
+    }
+
+    Process {
+        id: accionTailscale
+        environment: ({ LC_ALL: "C" })
+        stderr: StdioCollector { id: errorTailscale }
+        onExited: codigo => {
+            if (codigo !== 0)
+                panel.errorVpn = /access denied|permission|operator/i.test(errorTailscale.text)
+                    ? "Tailscale pide permisos. Ejecuta una sola vez:\nsudo tailscale set --operator=$USER"
+                    : "Tailscale: " + (errorTailscale.text.trim().split("\n")[0] || "no respondió");
+            panel.refrescar();
+        }
+    }
+
+    Process {
+        id: accionVpn
+        environment: ({ LC_ALL: "C" })
+        onExited: codigo => {
+            if (codigo !== 0) panel.errorVpn = "No se pudo cambiar la VPN (revisa el editor de conexiones)";
+            panel.refrescar();
+        }
+    }
+
+    // Tráfico en vivo: /proc/net/dev cada segundo, solo con el panel abierto
+    property var lecturaPrevia: null
+    FileView {
+        id: contadores
+        path: "/proc/net/dev"
+        printErrors: false
+        onLoaded: {
+            if (!panel.abierto) return;
+            const ahora = Date.now(), actual = {}, r = {};
+            const prev = panel.lecturaPrevia;
+            for (const l of text().split("\n").slice(2)) {
+                const i = l.indexOf(":");
+                if (i < 0) continue;
+                const n = l.slice(0, i).trim(), c = l.slice(i + 1).trim().split(/\s+/);
+                const rx = Number(c[0]), tx = Number(c[8]);
+                actual[n] = { rx: rx, tx: tx };
+                const p = prev ? prev.datos[n] : null;
+                const s = prev ? Math.max(0.2, (ahora - prev.hora) / 1000) : 1;
+                r[n] = { rx: rx, tx: tx,
+                         bajada: p ? Math.max(0, (rx - p.rx) / s) : 0,
+                         subida: p ? Math.max(0, (tx - p.tx) / s) : 0 };
+            }
+            panel.lecturaPrevia = { hora: ahora, datos: actual };
+            panel.trafico = r;
+        }
+    }
+
+    Timer {
+        interval: 1000
+        running: panel.abierto
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: contadores.reload()
+    }
+
+    // Datos de una interfaz física para DatosRed
+    function datosInterfaz(i) {
+        return [
+            { n: "Dirección IP", v: i.ip },
+            { n: "Máscara", v: i.ip ? mascara(i.prefijo) + " (/" + i.prefijo + ")" : "" },
+            { n: "Puerta de enlace", v: i.puerta },
+            { n: "Asignación", v: i.asignacion },
+            { n: "DNS", v: (i.dns || [])[0] || "" },
+            { n: "DNS 2", v: (i.dns || [])[1] || "" },
+            { n: "Difusión", v: i.difusion },
+            { n: "IPv6", v: i.v6 },
+            { n: "MAC", v: i.mac },
+            { n: "Interfaz", v: i.nombre + (i.controlador ? " (" + i.controlador + ")" : "") },
+            { n: "MTU", v: i.mtu ? "" + i.mtu : "" },
+            { n: "Dominio", v: i.dominio || "" }
+        ];
+    }
+
+    function velocidad(mbps) {
+        return mbps <= 0 ? "" : mbps >= 1000 ? (mbps / 1000) + " Gb/s" : mbps + " Mb/s";
+    }
+
+    function estadoTexto(e) {
+        if (e.startsWith("connected")) return "Conectado";
+        if (e.startsWith("connecting")) return "Conectando…";
+        if (e === "unavailable") return "Cable desconectado";
+        if (e === "unmanaged") return "No administrada";
+        return "Desconectado";
     }
 
     function refrescar() {
@@ -168,13 +432,26 @@ PanelEmergente {
         target: panel
         function onAbrio() {
             panel.error = "";
+            panel.errorVpn = "";
+            panel.elegida = false;
+            panel.lecturaPrevia = null;
             panel.refrescar();
         }
     }
 
     Process {
         id: consulta
-        command: ["sh", "-c", "nmcli radio wifi; echo ---; nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device; echo ---; nmcli -t -f IN-USE,SIGNAL,SECURITY,SSID device wifi list; echo ---; nmcli -t -f NAME,TYPE connection show; echo ---; ip -4 -o addr show"]
+        command: ["sh", "-c",
+            "nmcli radio wifi; echo @@@; " +
+            "nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device; echo @@@; " +
+            "nmcli -t -f IN-USE,SIGNAL,CHAN,FREQ,RATE,SECURITY,BSSID,SSID device wifi list 2>/dev/null; echo @@@; " +
+            "nmcli -t -f TYPE,UUID,ACTIVE,NAME connection show; echo @@@; " +
+            "ip -j -d addr show; echo; echo @@@; " +
+            "for d in /sys/class/net/*/; do n=${d%/}; f=0; [ -e \"$d/device\" ] && f=1; " +
+            "echo \"${n##*/}|$f|$(cat \"$d/speed\" 2>/dev/null)|$(cat \"$d/duplex\" 2>/dev/null)\"; done; echo @@@; " +
+            "nmcli -t -f GENERAL.DEVICE,GENERAL.DRIVER,IP4.GATEWAY,IP4.DNS,IP4.DOMAIN device show; echo @@@; " +
+            "if command -v tailscale >/dev/null; then timeout 3 tailscale status --json 2>/dev/null; else echo no; fi; echo; echo @@@; " +
+            "ip -j -4 route show default"]
         environment: ({ LC_ALL: "C" })
         stdout: StdioCollector {
             onStreamFinished: panel.procesar(this.text)
@@ -233,36 +510,153 @@ PanelEmergente {
     }
 
     accesorio: Interruptor {
+        visible: panel.pestana === "wifi"
         activo: panel.wifiActivo
         onAlternado: panel.radio(!panel.wifiActivo)
     }
 
-    // ---------- Conexion actual ----------
-    FilaLista {
-        visible: panel.interfazCable !== ""
-        icono: "󰈀"
-        colorIcono: Tema.ambar
-        titulo: "Cable"
-        subtitulo: panel.ip !== "" ? "Conectado · " + panel.ip : "Conectado"
-        colorSubtitulo: Tema.ambar
-        resaltada: true
+    // ---------- Pestañas ----------
+    Row {
+        id: filaPestanas
+        visible: panel.pestanas.length > 0
+        width: parent.width
+        spacing: 6
+
+        Repeater {
+            model: panel.pestanas
+
+            delegate: Rectangle {
+                id: botonPestana
+
+                required property var modelData
+                readonly property bool activa: panel.pestana === modelData.id
+                // Punto de estado
+                readonly property bool conectada: modelData.id === "cable" ? panel.cables.some(c => c.conectada)
+                    : modelData.id === "wifi" ? panel.conectadaA !== ""
+                    : (panel.tailscale !== null && panel.tailscale.activo) || panel.vpns.some(v => v.conectada) || panel.perfilesVpn.some(p => p.activa)
+
+                width: (filaPestanas.width - filaPestanas.spacing * (panel.pestanas.length - 1)) / panel.pestanas.length
+                height: 36
+                radius: 18
+                color: activa ? Tema.acento : zonaPestana.containsMouse ? Tema.campoHover : Tema.campo
+                Behavior on color { ColorAnimation { duration: 140 } }
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 8
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: botonPestana.modelData.icono
+                        color: botonPestana.activa ? Tema.fondo : Tema.texto
+                        font.family: Tema.fuenteBarra
+                        font.pixelSize: 16
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: botonPestana.modelData.texto
+                        color: botonPestana.activa ? Tema.fondo : Tema.texto
+                        font.family: Tema.fuenteBarra
+                        font.pixelSize: 13
+                        font.bold: true
+                    }
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 8
+                        height: 8
+                        radius: 4
+                        color: botonPestana.conectada ? (botonPestana.activa ? "#1f7a43" : Tema.verde)
+                                                      : (botonPestana.activa ? Tema.bordeFuerte : Tema.tenue)
+                    }
+                }
+
+                MouseArea {
+                    id: zonaPestana
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        panel.elegida = true;
+                        panel.pestana = botonPestana.modelData.id;
+                    }
+                }
+            }
+        }
     }
 
+    Text {
+        visible: panel.pestanas.length === 0
+        text: panel.listo ? "Este equipo no tiene conexiones de red" : "Consultando…"
+        color: Tema.tenue
+        font.family: Tema.fuenteBarra
+        font.pixelSize: 13
+    }
+
+    // ---------- Ethernet ----------
+    Column {
+        visible: panel.pestana === "cable"
+        width: parent.width
+        spacing: 10
+
+        Repeater {
+            model: panel.cables
+
+            delegate: Column {
+                id: cable
+                required property var modelData
+                width: parent.width
+                spacing: 8
+
+                FilaLista {
+                    icono: String.fromCodePoint(0xf0200)
+                    colorIcono: cable.modelData.conectada ? Tema.ambar : Tema.tenue
+                    titulo: cable.modelData.conexion || cable.modelData.nombre
+                    subtitulo: panel.estadoTexto(cable.modelData.estado)
+                    colorSubtitulo: cable.modelData.conectada ? Tema.verde : Tema.tenue
+                    resaltada: true
+                    detalle: !cable.modelData.conectada ? "" : panel.velocidad(cable.modelData.velocidad)
+                        + (cable.modelData.duplex === "full" ? " dúplex" : cable.modelData.duplex === "half" ? " semidúplex" : "")
+                    colorDetalle: Tema.ambar
+                }
+                TraficoRed {
+                    visible: cable.modelData.conectada
+                    valores: panel.trafico[cable.modelData.nombre] || null
+                }
+                DatosRed { datos: panel.datosInterfaz(cable.modelData) }
+            }
+        }
+    }
+
+    // ---------- Wi-Fi ----------
     FilaLista {
-        visible: panel.conectadaA !== ""
+        visible: panel.pestana === "wifi" && panel.conectadaA !== ""
         icono: "󰖩"
         colorIcono: Tema.ambar
         titulo: panel.conectadaA
-        subtitulo: panel.interfazCable === "" && panel.ip !== "" ? "Conectado · " + panel.ip : "Conectado"
-        colorSubtitulo: Tema.ambar
+        subtitulo: panel.wifi && panel.wifi.red ? "Conectado · señal " + panel.wifi.red.senal + "% · " + panel.wifi.red.ritmo : "Conectado"
+        colorSubtitulo: Tema.verde
         resaltada: true
         detalle: "Desconectar"
         colorDetalle: Tema.error
         onClic: panel.desconectar()
     }
 
+    TraficoRed {
+        visible: panel.pestana === "wifi" && panel.conectadaA !== ""
+        valores: panel.trafico[panel.interfazWifi] || null
+    }
+
+    DatosRed {
+        readonly property var r: panel.wifi ? panel.wifi.red : null
+        visible: panel.pestana === "wifi" && panel.conectadaA !== ""
+        datos: panel.wifi ? panel.datosInterfaz(panel.wifi).concat(r ? [
+            { n: "Frecuencia", v: r.frecuencia + (r.canal ? " (canal " + r.canal + ")" : "") },
+            { n: "Seguridad", v: r.seguridad || "Abierta" },
+            { n: "Punto de acceso", v: r.bssid }
+        ] : []) : []
+    }
+
     Text {
-        visible: !panel.wifiActivo
+        visible: panel.pestana === "wifi" && !panel.wifiActivo
         width: parent.width
         text: "Wi-Fi apagado"
         color: Tema.tenue
@@ -272,13 +666,13 @@ PanelEmergente {
 
     // ---------- Redes disponibles ----------
     TituloSeccion {
-        visible: panel.wifiActivo
+        visible: panel.pestana === "wifi" && panel.wifiActivo
         texto: "Redes disponibles"
         extra: panel.buscando ? "Buscando…" : ""
     }
 
     Repeater {
-        model: panel.wifiActivo ? panel.redes : []
+        model: panel.pestana === "wifi" && panel.wifiActivo ? panel.redes : []
 
         delegate: FilaLista {
             required property var modelData
@@ -296,13 +690,129 @@ PanelEmergente {
     }
 
     Text {
-        visible: panel.error !== ""
+        visible: panel.pestana === "wifi" && panel.error !== ""
         width: parent.width
         wrapMode: Text.Wrap
         text: panel.error
         color: Tema.error
         font.family: Tema.fuenteBarra
         font.pixelSize: 12
+    }
+
+    // ---------- VPN ----------
+    Column {
+        visible: panel.pestana === "vpn"
+        width: parent.width
+        spacing: 8
+
+        FilaLista {
+            visible: panel.hayTailscale
+            icono: String.fromCodePoint(0xf0582)
+            colorIcono: panel.tailscale && panel.tailscale.activo ? Tema.ambar : Tema.tenue
+            titulo: "Tailscale" + (panel.tailscale && panel.tailscale.nombre ? " · " + panel.tailscale.nombre : "")
+            subtitulo: panel.textoTailscale
+            colorSubtitulo: panel.tailscale && panel.tailscale.activo ? Tema.verde : Tema.tenue
+            resaltada: true
+            detalle: accionTailscale.running ? "…" : !panel.tailscale ? ""
+                   : panel.tailscale.activo ? "Desconectar" : panel.tailscale.estado === "Stopped" ? "Conectar" : ""
+            colorDetalle: panel.tailscale && panel.tailscale.activo ? Tema.error : Tema.verde
+            onClic: if (detalle.length > 1) panel.alternarTailscale()
+        }
+        TraficoRed {
+            visible: panel.tailscale !== null && panel.tailscale.activo
+            valores: panel.trafico["tailscale0"] || null
+        }
+        DatosRed {
+            readonly property var t: panel.tailscale
+            visible: t !== null && t.activo
+            datos: t === null ? [] : [
+                { n: "Dirección IP", v: t.ip },
+                { n: "Máscara", v: t.prefijo ? panel.mascara(t.prefijo) + " (/" + t.prefijo + ")" : "" },
+                { n: "IPv6", v: t.v6 },
+                { n: "Nombre DNS", v: t.dns },
+                { n: "Red", v: t.red },
+                { n: "Cuenta", v: t.usuario !== t.red ? t.usuario : "" },
+                { n: "Nodo de salida", v: t.salida || "Ninguno" },
+                { n: "Relé cercano", v: t.rele },
+                { n: "MTU", v: t.mtu ? "" + t.mtu : "" },
+                { n: "Versión", v: t.version }
+            ]
+        }
+
+        TituloSeccion {
+            visible: panel.equipos.length > 0
+            texto: "Equipos"
+            extra: panel.tailscale ? panel.tailscale.enLinea + " de " + panel.tailscale.total + " en línea" : ""
+        }
+        ListView {
+            visible: count > 0
+            width: parent.width
+            height: Math.min(contentHeight, 212)
+            clip: true
+            spacing: 4
+            boundsBehavior: Flickable.StopAtBounds
+            model: panel.equipos
+            delegate: FilaLista {
+                required property var modelData
+                width: ListView.view.width
+                icono: String.fromCodePoint(/ios|android/i.test(modelData.so) ? 0xf011c : 0xf0379)
+                colorIcono: modelData.enLinea ? Tema.verde : Tema.tenue
+                titulo: modelData.nombre
+                subtitulo: [modelData.enLinea ? "En línea" : "Sin conexión", modelData.so, modelData.via,
+                            modelData.salida ? "nodo de salida" : ""].filter(x => x).join(" · ")
+                detalle: modelData.ip
+                onClic: Quickshell.execDetached(["wl-copy", "--", modelData.ip])
+            }
+        }
+
+        // Otros túneles activos
+        Repeater {
+            model: panel.vpns
+            delegate: Column {
+                id: tunel
+                required property var modelData
+                width: parent.width
+                spacing: 8
+                FilaLista {
+                    icono: String.fromCodePoint(0xf0582)
+                    colorIcono: tunel.modelData.conectada ? Tema.ambar : Tema.tenue
+                    titulo: tunel.modelData.clase + " · " + (tunel.modelData.conexion || tunel.modelData.nombre)
+                    subtitulo: tunel.modelData.conectada ? "Conectado" : "Desconectado"
+                    colorSubtitulo: tunel.modelData.conectada ? Tema.verde : Tema.tenue
+                    resaltada: true
+                }
+                TraficoRed {
+                    visible: tunel.modelData.conectada
+                    valores: panel.trafico[tunel.modelData.nombre] || null
+                }
+                DatosRed { datos: panel.datosInterfaz(tunel.modelData) }
+            }
+        }
+
+        // VPN guardadas en NetworkManager
+        TituloSeccion { visible: panel.perfilesVpn.length > 0; texto: "VPN guardadas" }
+        Repeater {
+            model: panel.perfilesVpn
+            delegate: FilaLista {
+                required property var modelData
+                icono: String.fromCodePoint(0xf0582)
+                titulo: modelData.nombre
+                subtitulo: modelData.tipo + (modelData.activa ? " · Conectada" : "")
+                detalle: modelData.activa ? "Desconectar" : "Conectar"
+                colorDetalle: modelData.activa ? Tema.error : Tema.verde
+                onClic: panel.alternarPerfil(modelData)
+            }
+        }
+
+        Text {
+            visible: panel.errorVpn !== ""
+            width: parent.width
+            wrapMode: Text.Wrap
+            text: panel.errorVpn
+            color: Tema.error
+            font.family: Tema.fuenteBarra
+            font.pixelSize: 12
+        }
     }
 
     // ---------- Pie ----------
@@ -312,7 +822,7 @@ PanelEmergente {
         spacing: 8
 
         BotonTexto {
-            visible: panel.wifiActivo
+            visible: panel.pestana === "wifi" && panel.wifiActivo
             icono: "󰑐"
             texto: "Buscar redes"
             onClic: panel.buscar()

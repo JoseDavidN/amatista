@@ -1,9 +1,8 @@
 // ==========================================================
-// Hardware en una sola capsula, como tu "group/hardware" de Waybar:
-// se ve la CPU y, al hacer clic, la capsula se alarga hacia la
-// izquierda mostrando Disco / RAM / CPU dentro del mismo boton.
-// Otro clic la vuelve a recoger.
-// Se actualizan cada 10 s.
+// Hardware en una sola capsula: uso de CPU
+//   Clic:    panel con todo el hardware
+//   Derecho: la capsula se alarga hacia la izquierda con Disco / RAM / GPU
+// Se actualiza cada 10 s.
 // ==========================================================
 import QtQuick
 import Quickshell
@@ -22,14 +21,14 @@ Rectangle {
     property real totalAnterior: 0
     property real ocioAnterior: 0
 
-    // Se despliega con un clic (no al pasar el raton)
+    // Se despliega con el clic derecho
     property bool abierto: false
     readonly property int relleno: 10
 
     implicitWidth: extra.width + segCpu.implicitWidth + relleno * 2
     implicitHeight: Tema.altoPildora
     radius: Tema.radioPildora
-    color: hover.hovered ? Tema.pildoraHover : Tema.pildora
+    color: hover.hovered || panel.abierto ? Tema.pildoraHover : Tema.pildora
 
     Behavior on color { ColorAnimation { duration: 120 } }
 
@@ -117,7 +116,17 @@ Rectangle {
 
     TapHandler {
         acceptedButtons: Qt.LeftButton
+        onTapped: panel.alternar()
+    }
+
+    TapHandler {
+        acceptedButtons: Qt.RightButton
         onTapped: mod.abierto = !mod.abierto
+    }
+
+    PanelHardware {
+        id: panel
+        objetivo: mod
     }
 
     // Icono + texto, con el mismo estilo que Pildora
@@ -160,7 +169,7 @@ Rectangle {
         anchors.rightMargin: mod.relleno
         anchors.verticalCenter: parent.verticalCenter
 
-        // Disco / RAM / : se despliega hacia la izquierda dentro de la capsula
+        // Disco / RAM / GPU: se despliega hacia la izquierda dentro de la capsula
         Item {
             id: extra
             anchors.verticalCenter: parent.verticalCenter
@@ -182,6 +191,7 @@ Rectangle {
                     texto: mod.discoUsado
                 }
                 Separador {}
+
                 Segmento {
                     anchors.verticalCenter: parent.verticalCenter
                     icono: ""
