@@ -23,7 +23,7 @@ Scope {
     readonly property int minutosBloquear: 10
     readonly property int minutosApagar: 15
 
-    property bool activa: true
+    readonly property bool activa: EstadoInactividad.activa
     property bool atenuado: false
     property bool pantallaApagada: false
 
@@ -70,9 +70,7 @@ Scope {
     IpcHandler {
         target: "inactividad"
         function alternar(): string {
-            inactividad.activa = !inactividad.activa;
-            Quickshell.execDetached(["notify-send", "-a", "Sistema", "-u", "low", "Inactividad",
-                inactividad.activa ? "Bloqueo automático activado" : "Modo café: no se bloqueará ni apagará la pantalla"]);
+            EstadoInactividad.alternar();
             return inactividad.activa ? "activa" : "pausada";
         }
         function estado(): string { return inactividad.activa ? "activa" : "pausada"; }

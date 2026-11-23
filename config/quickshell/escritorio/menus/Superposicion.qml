@@ -1,6 +1,6 @@
 // ==========================================================
 // Ventana centrada sobre la pantalla con fondo oscurecido
-// (base del lanzador y del menu de apagado)
+// (base del lanzador y del portapapeles)
 // - Se abre en el monitor que tiene el foco
 // - Clic fuera de la tarjeta o Escape = cerrar
 // ==========================================================

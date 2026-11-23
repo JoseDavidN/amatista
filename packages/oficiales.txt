@@ -48,6 +48,7 @@ libnotify
 xdg-user-dirs
 jq
 gum
+pacman-contrib
 unzip
 
 # Audio, red y Bluetooth

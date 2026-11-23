@@ -85,3 +85,41 @@ Lista de lo que falta para completar el tema. Marcar con `[x]` al terminar.
 - [x] Auriculares del panel frontal del chasis (i5) tras reiniciar
       (firmware `hda-jack-retask.fw`).
 - [x] Cambio automático de audio al conectar y desconectar los auriculares traseros (probado).
+
+## Añadidos
+
+- [x] **Clima**: clic en la fecha y hora (módulo `clima` de Quickshell, Open-Meteo, ubicación
+      por IP o ciudad elegida). Solo consulta con el panel abierto. Panel horizontal: lluvia y
+      humedad, lluvia en 24 horas y próximos días.
+- [x] **Lanzador por secciones**: Aplicaciones (por categoría), Fondos y Sesión en una lista
+      con iconos. El menú de apagado se integró aquí (`MenuApagado.qml`, su IPC y el botón de la
+      barra eliminados).
+- [x] **Panel de red por pestañas**: Ethernet, Wi-Fi y VPN (Tailscale y similares); solo las
+      que el equipo tiene. Datos copiables, tráfico en vivo y equipos de Tailscale. Los
+      paneles que no caben en la pantalla se desplazan.
+- [x] **Panel de luz nocturna**: encender / apagar y horario automático (clic en la píldora;
+      clic derecho alterna directo).
+
+### Barra completa
+
+- [x] 1. Bandeja del sistema (menús con el tema y submenús; solo si hay apps)
+- [x] 2. Centro de notificaciones (campana, historial, no molestar)
+- [x] 3. Indicador de modo café
+- [x] 4. Privacidad: micrófono y captura de pantalla
+- [x] 5. Panel de hardware con temperaturas; la píldora muestra la CPU (sin alertas, por decisión del usuario)
+- ~~6. Clima visible en la barra y calendario mensual~~ (descartado por decisión del usuario)
+- [x] 7. Indicador de actualizaciones de Arch y AUR (script `actualizaciones`, necesita `pacman-contrib`)
+- [x] 8. Aviso de respaldos: píldora solo si hay un problema o uno en marcha, panel con historial
+- ~~9. Título de la ventana activa~~ (descartado por decisión del usuario)
+- [x] 10. Red: indicador de VPN activa y velocidad en vivo en la píldora (la IP va en el tooltip)
+- ~~11. Bluetooth: batería de los dispositivos~~ (descartado por decisión del usuario)
+- ~~12. Workspaces: vista previa de ventanas~~ (descartado por decisión del usuario)
+
+### Mantenimiento del equipo i5 (no forma parte del tema)
+
+- [x] **SATA en modo AHCI** (23 nov 2026): controlador `ahci`, NCQ 32, SSD a 6 Gb/s y disco de
+      respaldos a 3 Gb/s (puerto SATA 2). Comprobado tras reiniciar.
+- [x] **`/etc/fstab` corregido** (23 nov 2026): sin duplicados, `/home` en `@home` y `/var/log`
+      en `@var_log`, comprobado tras reiniciar. Copia anterior: `/etc/fstab.respaldo`. Se perdió
+      el `pacman.log` de la instalación inicial (28 KB) al copiar los registros.
+  - [x] Retirados los registros viejos que quedaron en `/home`.

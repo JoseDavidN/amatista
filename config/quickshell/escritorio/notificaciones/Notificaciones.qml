@@ -24,7 +24,6 @@ Scope {
 
     // ---------- Ajustes ----------
     readonly property int maxVisibles: 5
-    readonly property int maxHistorial: 30
     readonly property int duracionBaja: 3000
     readonly property int duracionNormal: 5000
     readonly property int duracionMaxima: 30000
@@ -35,7 +34,7 @@ Scope {
         "Red": 3000
     })
 
-    property bool noMolestar: false
+    readonly property bool noMolestar: Centro.noMolestar
 
     // ---------- Estado ----------
     // Las notificaciones vivas se guardan en un mapa, nunca en el modelo:
@@ -45,7 +44,8 @@ Scope {
 
     // Lo que se muestra en pantalla y el historial guardan solo copias de datos
     property ListModel popups: ListModel {}
-    property ListModel historial: ListModel {}
+    // (el historial vive en Centro, para mostrarlo en la barra)
+    readonly property ListModel historial: Centro.historial
 
     // ---------- Conversion de una notificacion a datos simples ----------
     function urgenciaDe(n) {
@@ -137,7 +137,7 @@ Scope {
 
         // En "no molestar" solo pasan las criticas
         if (noMolestar && datos.urgencia < 2) {
-            agregarAlHistorial(datos);
+            agregarAlHistorial(datos, false);
             delete vivas[nid];
             n.expire();
             return;
@@ -171,7 +171,8 @@ Scope {
         if (i < 0) return;
         const datos = copiar(popups.get(i));
         popups.remove(i);
-        agregarAlHistorial(datos);
+        // Cerrarla a mano cuenta como leída
+        agregarAlHistorial(datos, razon !== "expirada");
 
         const n = vivas[nid];
         delete vivas[nid];
@@ -189,13 +190,8 @@ Scope {
         if (i >= 0) popups.remove(i);
     }
 
-    function agregarAlHistorial(datos) {
-        const j = indiceEn(historial, datos.nid);
-        if (j >= 0) historial.remove(j);
-        datos.restaurada = false;
-        historial.insert(0, datos);
-        while (historial.count > maxHistorial)
-            historial.remove(historial.count - 1);
+    function agregarAlHistorial(datos, leida) {
+        Centro.agregar(datos, leida);
     }
 
     function invocar(nid, accionId) {
@@ -228,7 +224,7 @@ Scope {
     function restaurar() {
         if (historial.count === 0) return;
         const datos = copiar(historial.get(0));
-        historial.remove(0);
+        Centro.quitar(0);
         datos.restaurada = true;
         if (datos.duracion === 0 && datos.urgencia < 2) datos.duracion = duracionNormal;
         mostrar(datos);
@@ -255,8 +251,8 @@ Scope {
         function cerrarTodas(): void { servicio.cerrarTodas(); }
         function restaurar(): void { servicio.restaurar(); }
         function noMolestar(): string {
-            servicio.noMolestar = !servicio.noMolestar;
-            return servicio.noMolestar ? "No molestar: activado" : "No molestar: desactivado";
+            Centro.noMolestar = !Centro.noMolestar;
+            return Centro.noMolestar ? "No molestar: activado" : "No molestar: desactivado";
         }
     }
 

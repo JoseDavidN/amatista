@@ -1,0 +1,83 @@
+#!/bin/sh
+# Datos del hardware para el panel de la barra, sin permisos de root.
+#
+#   info-hardware fija    lo que no cambia (modelos, placa, RAM, PCI, USB...)
+#   info-hardware viva    uso, frecuencias, temperaturas, discos y procesos
+#
+# Cada línea es CLAVE|valor|valor...
+export LC_ALL=C
+
+leer() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
+
+case "$1" in
+    fija)
+        lscpu | sed -n 's/^\([^:]*\): */CPU|\1|/p'
+        echo "GOBERNADOR|$(leer /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)|$(leer /sys/devices/system/cpu/cpu0/cpufreq/scaling_driver)"
+        for d in board_vendor board_name sys_vendor product_name bios_vendor bios_version bios_date; do
+            echo "DMI|$d|$(leer /sys/class/dmi/id/$d)"
+        done
+        udevadm info -q property /sys/devices/virtual/dmi/id 2>/dev/null | sed -n 's/^MEMORY_\([^=]*\)=/RAM|\1|/p'
+        echo "SO|$(. /etc/os-release; echo "$PRETTY_NAME")|$(uname -r)|$(uname -m)|$(uname -n)"
+        [ -d /sys/firmware/efi ] && echo "ARRANQUE|UEFI" || echo "ARRANQUE|BIOS"
+        # PCI|driver|línea de lspci -mm
+        lspci -Dmm 2>/dev/null | while IFS= read -r l; do
+            r=$(readlink "/sys/bus/pci/devices/${l%% *}/driver")
+            echo "PCI|${r##*/}|$l"
+        done
+        for d in /sys/bus/usb/devices/*; do
+            [ -e "$d/product" ] && [ "$(leer "$d/idVendor")" != 1d6b ] &&
+                echo "USB|$(leer "$d/manufacturer")|$(leer "$d/product")|$(leer "$d/speed")"
+        done
+        echo "MONITORES|$(hyprctl monitors -j 2>/dev/null | tr -d '\n')"
+        ;;
+
+    viva)
+        sed -n 's/^\(cpu[0-9]*\) */STAT|\1|/p' /proc/stat
+        for f in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq; do
+            c=${f#/sys/devices/system/cpu/}
+            echo "FREC|${c%%/*}|$(leer "$f")"
+        done
+        echo "CARGA|$(cat /proc/loadavg)"
+        echo "TIEMPO|$(cat /proc/uptime)"
+        sed -n 's/^\([A-Za-z]*\): *\([0-9]*\).*/MEM|\1|\2/p' /proc/meminfo
+        tail -n +2 /proc/swaps | while read -r dev tipo total usado _; do echo "SWAP|$dev|$tipo|$total|$usado"; done
+        for h in /sys/class/hwmon/hwmon*; do
+            n=$(leer "$h/name")
+            # drivetemp: el disco al que pertenece
+            disco=""
+            for b in "$h"/device/block/*; do [ -e "$b" ] && disco=${b##*/}; done
+            [ -z "$disco" ] && [ "$n" = nvme ] && for b in "$h"/device/nvme*n*; do [ -e "$b" ] && disco=${b##*/}; done
+            for t in "$h"/temp*_input; do
+                [ -r "$t" ] && v=$(leer "$t") && [ -n "$v" ] && echo "TEMP|$n|$(leer "${t%_input}_label")|$v|$disco"
+            done
+            for t in "$h"/fan*_input; do
+                [ -r "$t" ] && v=$(leer "$t") && [ -n "$v" ] && echo "VENT|$n|$(leer "${t%_input}_label")|$v"
+            done
+        done
+        # GPU|tarjeta|driver|frecuencia|máxima|uso|VRAM usada|VRAM total
+        for c in /sys/class/drm/card[0-9] /sys/class/drm/card[0-9][0-9]; do
+            [ -e "$c/device/driver" ] || continue
+            r=$(readlink "$c/device/driver"); r=${r##*/}
+            f=$(leer "$c/gt_act_freq_mhz"); m=$(leer "$c/gt_RP0_freq_mhz")
+            if [ "$r" = amdgpu ]; then
+                f=$(sed -n 's/^[0-9]*: *\([0-9]*\)Mhz \*.*/\1/p' "$c/device/pp_dpm_sclk" 2>/dev/null)
+                m=$(sed -n 's/^[0-9]*: *\([0-9]*\)Mhz.*/\1/p' "$c/device/pp_dpm_sclk" 2>/dev/null | tail -1)
+            fi
+            echo "GPU|${c##*/}|$r|$f|$m|$(leer "$c/device/gpu_busy_percent")|$(leer "$c/device/mem_info_vram_used")|$(leer "$c/device/mem_info_vram_total")|$(basename "$(readlink -f "$c/device")")"
+        done
+        command -v nvidia-smi >/dev/null && nvidia-smi --query-gpu=name,clocks.gr,clocks.max.gr,utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits 2>/dev/null | sed 's/, */|/g; s/^/NVIDIA|/'
+        sed -n 's/^ *[0-9]* *[0-9]* \([a-z]*[0-9a-z]*\) \(.*\)/DISCOIO|\1|\2/p' /proc/diskstats
+        echo "DISCOS|$(lsblk -J -b -o NAME,TYPE,SIZE,MODEL,ROTA,TRAN,FSTYPE,MOUNTPOINTS,FSUSED,FSSIZE,LABEL 2>/dev/null | tr -d '\n')"
+        # PROC|pid|tics de CPU|páginas de memoria|nombre (el nombre puede llevar espacios)
+        cat /proc/[0-9]*/stat 2>/dev/null | awk '{
+            i = index($0, "("); p = substr($0, 1, i - 2); r = substr($0, i + 1)
+            match(r, /.*\) /); n = substr(r, 1, RLENGTH - 2); split(substr(r, RLENGTH + 1), c, " ")
+            if (c[22] > 0) print "PROC|" p "|" c[12] + c[13] "|" c[22] "|" n }'
+        ;;
+
+    *)
+        echo "Uso: info-hardware fija | viva" >&2
+        exit 1
+        ;;
+esac
+exit 0

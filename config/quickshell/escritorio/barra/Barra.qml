@@ -5,8 +5,10 @@
 //
 //   Izquierda: Arch · workspaces · multimedia
 //   Centro:    reloj
-//   Derecha:   grabacion (solo al grabar) · luz nocturna · perfil de energia
-//              (solo portatil) · bateria · bluetooth · volumen · red · CPU/RAM · apagar
+//   Derecha:   bandeja · privacidad (microfono / pantalla en uso) · cafe ·
+//              actualizaciones · respaldos (los cinco solo si hay algo) · grabacion (solo al grabar) · luz nocturna · perfil de energia
+//              (solo portatil) · bateria · bluetooth · volumen · red · CPU/RAM ·
+//              notificaciones
 // ==========================================================
 import QtQuick
 import Quickshell
@@ -81,6 +83,11 @@ Scope {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Tema.barraEspacio
 
+                ModuloBandeja {}
+                ModuloPrivacidad {}
+                ModuloCafe {}
+                ModuloActualizaciones {}
+                ModuloRespaldos {}
                 ModuloGrabacion {}
                 ModuloLuzNocturna {}
                 ModuloPerfilEnergia {}
@@ -89,14 +96,7 @@ Scope {
                 ModuloAudio {}
                 ModuloRed { compacta: ventana.compacta }
                 ModuloHardware {}
-
-                Pildora {
-                    icono: "⏻"
-                    colorIcono: Tema.error
-                    colorHover: Tema.pildoraPeligro
-                    relleno: 14
-                    onClicIzquierdo: Quickshell.execDetached(["qs", "-c", "escritorio", "ipc", "call", "menuApagado", "alternar"])
-                }
+                ModuloNotificaciones {}
             }
         }
     }
